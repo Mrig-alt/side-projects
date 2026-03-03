@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "people-tracker"
+version = "0.1.0"
+description = "Track people's LinkedIn and Instagram posts and know when to reach out"
+requires-python = ">=3.11"
+dependencies = [
+    "playwright>=1.42.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+tracker = "tracker.cli:main"
