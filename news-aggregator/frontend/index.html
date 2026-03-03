@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Intelligence Feed</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="site-header">
+  <div class="header-left">
+    <span class="logo">⚡ Intel Feed</span>
+    <span class="last-refresh" id="last-refresh">Loading...</span>
+  </div>
+  <div class="header-center">
+    <div class="search-bar">
+      <input type="text" id="search-input" placeholder="Search any topic — news, data, events..." autocomplete="off" />
+      <button id="search-btn">Search</button>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="refresh-btn" id="refresh-btn" title="Refresh all feeds">↻ Refresh</button>
+  </div>
+</header>
+
+<!-- ===== MAIN LAYOUT ===== -->
+<main>
+
+  <!-- SEARCH RESULTS PANEL (hidden by default) -->
+  <section class="search-results-panel" id="search-panel" style="display:none">
+    <div class="panel-header">
+      <span class="panel-title">🔍 Search: <em id="search-query-label"></em></span>
+      <button class="close-btn" id="close-search">✕ Close</button>
+    </div>
+    <div class="ai-briefing" id="search-briefing" style="display:none"></div>
+    <div class="articles-grid" id="search-results"></div>
+  </section>
+
+  <!-- HERO: Top 3 stories from last 6 hours -->
+  <section class="hero-section" id="hero-section">
+    <h2 class="section-label">🔥 Top Stories — Last 6 Hours</h2>
+    <div class="hero-grid" id="hero-grid">
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+    </div>
+  </section>
+
+  <!-- DEVELOPING STORIES -->
+  <section class="developing-section" id="developing-section">
+    <h2 class="section-label">🧵 Developing Stories <span class="ai-badge">AI</span></h2>
+    <div class="developing-grid" id="developing-grid">
+      <p class="placeholder-text">Analyzing patterns across all feeds...</p>
+    </div>
+  </section>
+
+  <!-- CATEGORY PANELS -->
+  <section class="categories-section">
+    <h2 class="section-label">📰 All Feeds</h2>
+
+    <!-- Tab bar -->
+    <div class="tab-bar" id="tab-bar">
+      <button class="tab active" data-cat="india_political">🇮🇳 India Politics</button>
+      <button class="tab" data-cat="india_financial">📈 India Finance</button>
+      <button class="tab" data-cat="us_political">🇺🇸 US Politics</button>
+      <button class="tab" data-cat="us_financial">💵 US Finance</button>
+      <button class="tab" data-cat="europe_political">🇪🇺 EU Politics</button>
+      <button class="tab" data-cat="europe_financial">💶 EU Finance</button>
+      <button class="tab" data-cat="ops_supply_chain">🚢 Ops & SC</button>
+    </div>
+
+    <!-- Dynamic topic tabs injected here -->
+    <div class="tab-bar topic-tabs" id="topic-tab-bar"></div>
+
+    <!-- Article grid -->
+    <div class="articles-grid" id="articles-grid">
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+    </div>
+  </section>
+
+  <!-- CUSTOM TOPICS WATCHLIST -->
+  <section class="topics-section">
+    <h2 class="section-label">📌 My Watchlists</h2>
+    <div class="topics-controls">
+      <input type="text" id="new-topic-label" placeholder="Topic label (e.g. Nvidia earnings)" />
+      <input type="text" id="new-topic-keywords" placeholder="Keywords (comma-separated)" />
+      <input type="text" id="new-topic-feeds" placeholder="Optional feed URLs (comma-separated)" />
+      <button id="add-topic-btn">+ Add Watchlist</button>
+    </div>
+    <div class="topics-list" id="topics-list">
+      <p class="placeholder-text">No watchlists yet. Add a topic above to start tracking.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===== ARTICLE DETAIL MODAL ===== -->
+<div class="modal-overlay" id="modal" style="display:none">
+  <div class="modal-card">
+    <div class="modal-header">
+      <span class="modal-source" id="modal-source"></span>
+      <button class="close-btn" id="modal-close">✕</button>
+    </div>
+    <h2 class="modal-title" id="modal-title"></h2>
+    <p class="modal-meta" id="modal-meta"></p>
+    <div class="modal-summary" id="modal-summary"></div>
+    <div class="modal-ai-summary" id="modal-ai-summary" style="display:none">
+      <span class="ai-badge">AI Summary</span>
+      <p id="modal-ai-text"></p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="modal-ai-btn">✦ Get AI Summary</button>
+      <a class="btn-secondary" id="modal-link" target="_blank" rel="noopener">Read Full Article ↗</a>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
