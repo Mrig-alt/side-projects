@@ -1,14 +1,27 @@
 /* ============================================================
-   Personal Intelligence Feed — Frontend Logic
+   Personal Intelligence Feed — Frontend Logic v2
+   Classification badges · Follow-up tracking · Perplexity live search
    ============================================================ */
 
-const API = "";  // same-origin
+const API = "";
+
+// ── Classification config ─────────────────────────────────────
+const CLF_LABELS = {
+  breaking:     { text: "Breaking",     cls: "clf-breaking" },
+  political:    { text: "Political",    cls: "clf-political" },
+  financial:    { text: "Financial",    cls: "clf-financial" },
+  supply_chain: { text: "Supply Chain", cls: "clf-supply_chain" },
+  developing:   { text: "Developing",   cls: "clf-developing" },
+  watchlist:    { text: "Watchlist",    cls: "clf-watchlist" },
+  search:       { text: "Search",       cls: "clf-search" },
+  general:      { text: "General",      cls: "clf-general" },
+};
 
 // ── State ────────────────────────────────────────────────────
-let allArticles = {};   // category_id → { label, icon, articles[] }
+let allArticles = {};
 let activeCategory = "india_political";
-let activeTopicId = null;
 let openArticle = null;
+let followedIds = new Set();
 
 // ── Utilities ────────────────────────────────────────────────
 function relativeTime(isoStr) {
@@ -22,33 +35,66 @@ function relativeTime(isoStr) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-function escHtml(str) {
+function esc(str) {
   return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function clfBadge(classification) {
+  const cfg = CLF_LABELS[classification] || CLF_LABELS.general;
+  return `<span class="classification-badge ${cfg.cls}">${cfg.text}</span>`;
 }
 
 function setLastRefresh(isoStr) {
-  if (!isoStr) return;
-  document.getElementById("last-refresh").textContent =
-    `Last refresh: ${relativeTime(isoStr)}`;
+  if (isoStr) document.getElementById("last-refresh").textContent = `Last refresh: ${relativeTime(isoStr)}`;
 }
 
 // ── Article Card ─────────────────────────────────────────────
 function renderArticleCard(art) {
-  const premiumClass = art.is_premium ? " premium" : "";
+  const premium = art.is_premium ? " premium" : "";
+  const isFollowing = followedIds.has(art.id);
+  const followBtnCls = isFollowing ? " following" : "";
+  const followBtnText = isFollowing ? "📬 Following" : "📬 Follow";
   const summary = art.summary
-    ? `<p class="article-summary">${escHtml(art.summary)}</p>`
-    : "";
+    ? `<p class="article-summary">${esc(art.summary)}</p>` : "";
+
   return `
     <div class="article-card" data-id="${art.id}" onclick="openModal('${art.id}')">
-      <span class="article-source${premiumClass}">${escHtml(art.source)}</span>
-      <p class="article-title">${escHtml(art.title)}</p>
+      <div class="article-card-top">
+        <span class="article-source${premium}">${esc(art.source)}</span>
+        <button class="card-followup-btn${followBtnCls}"
+          onclick="event.stopPropagation(); toggleFollowCard('${art.id}')"
+          data-follow-btn="${art.id}">${followBtnText}</button>
+      </div>
+      <p class="article-title">${esc(art.title)}</p>
       ${summary}
-      <span class="article-meta">${relativeTime(art.published)}</span>
+      <div class="article-footer">
+        <span class="article-meta">${relativeTime(art.published)}</span>
+        ${clfBadge(art.classification || "general")}
+      </div>
     </div>`;
+}
+
+async function toggleFollowCard(articleId) {
+  if (followedIds.has(articleId)) {
+    await fetch(`${API}/api/follow/${articleId}`, { method: "DELETE" });
+    followedIds.delete(articleId);
+  } else {
+    // Find article in allArticles
+    let art = null;
+    for (const cat of Object.values(allArticles)) {
+      art = (cat.articles || []).find(a => a.id === articleId);
+      if (art) break;
+    }
+    if (art) await followArticle(art);
+  }
+  // Update all buttons with this id
+  document.querySelectorAll(`[data-follow-btn="${articleId}"]`).forEach(btn => {
+    const isF = followedIds.has(articleId);
+    btn.textContent = isF ? "📬 Following" : "📬 Follow";
+    btn.classList.toggle("following", isF);
+  });
+  await refreshFollowupBadge();
 }
 
 // ── Hero Section ─────────────────────────────────────────────
@@ -56,24 +102,21 @@ async function loadHero() {
   try {
     const data = await fetch(`${API}/api/hero`).then(r => r.json());
     setLastRefresh(data.last_refresh);
-
     const grid = document.getElementById("hero-grid");
-    if (!data.stories || data.stories.length === 0) {
-      grid.innerHTML = `<p class="placeholder-text">No stories in the last 6 hours yet. Refresh to fetch latest.</p>`;
+    if (!data.stories?.length) {
+      grid.innerHTML = `<p class="placeholder-text">No stories in the last 6 hours yet.</p>`;
       return;
     }
     grid.innerHTML = data.stories.map((art, i) => `
       <div class="hero-card" onclick="openModal('${art.id}')">
-        <div class="hero-rank">${["01", "02", "03"][i]}</div>
-        <p class="hero-title">${escHtml(art.title)}</p>
-        <p class="hero-meta">
-          <span class="hero-source">${escHtml(art.source)}</span>
-          · ${relativeTime(art.published)}
-        </p>
+        <div class="hero-card-top">
+          <div class="hero-rank">${["01","02","03"][i]}</div>
+          ${clfBadge(art.classification || "general")}
+        </div>
+        <p class="hero-title">${esc(art.title)}</p>
+        <p class="hero-meta"><span class="hero-source">${esc(art.source)}</span> · ${relativeTime(art.published)}</p>
       </div>`).join("");
-  } catch (err) {
-    console.error("Hero load failed", err);
-  }
+  } catch (err) { console.error("Hero load failed", err); }
 }
 
 // ── Developing Stories ───────────────────────────────────────
@@ -81,25 +124,58 @@ async function loadDeveloping() {
   try {
     const data = await fetch(`${API}/api/developing`).then(r => r.json());
     const grid = document.getElementById("developing-grid");
-
-    if (!data.stories || data.stories.length === 0) {
-      grid.innerHTML = `<p class="placeholder-text">Developing story analysis runs after the first full refresh cycle.</p>`;
+    if (!data.stories?.length) {
+      grid.innerHTML = `<p class="placeholder-text">Developing story analysis runs after first full refresh.</p>`;
       return;
     }
     grid.innerHTML = data.stories.map(s => {
-      const regions = s.regions.map(r => `<span class="tag">${escHtml(r)}</span>`).join(" ");
-      const actors = s.key_actors.slice(0, 4).map(a => `<span class="tag">${escHtml(a)}</span>`).join(" ");
+      const regions = s.regions.map(r => `<span class="tag">${esc(r)}</span>`).join("");
+      const actors = s.key_actors.slice(0, 4).map(a => `<span class="tag">${esc(a)}</span>`).join("");
+      const isF = followedIds.has(s.id);
       return `
         <div class="developing-card">
-          <p class="developing-headline">${escHtml(s.headline)}</p>
-          <p class="developing-desc">${escHtml(s.description)}</p>
-          <div class="developing-meta">${regions}${actors}</div>
-          <p class="developing-watch">${escHtml(s.what_to_watch)}</p>
+          <div class="developing-card-header">
+            <p class="developing-headline">${esc(s.headline)}</p>
+            <button class="btn-follow-developing${isF ? " following" : ""}"
+              data-follow-btn="${s.id}"
+              onclick="toggleFollowDeveloping(${JSON.stringify(s)})">
+              ${isF ? "📬 Following" : "📬 Follow Up"}
+            </button>
+          </div>
+          <p class="developing-desc">${esc(s.description)}</p>
+          <div class="developing-meta">${clfBadge("developing")} ${regions}${actors}</div>
+          <p class="developing-watch">${esc(s.what_to_watch)}</p>
         </div>`;
     }).join("");
-  } catch (err) {
-    console.error("Developing stories load failed", err);
+  } catch (err) { console.error("Developing stories load failed", err); }
+}
+
+async function toggleFollowDeveloping(story) {
+  if (followedIds.has(story.id)) {
+    await fetch(`${API}/api/follow/${story.id}`, { method: "DELETE" });
+    followedIds.delete(story.id);
+  } else {
+    await fetch(`${API}/api/follow`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        article_id: story.id,
+        headline: story.headline,
+        url: "",
+        source: "Developing Story",
+        category_id: "developing",
+        classification: "developing",
+        keywords: [...(story.regions || []), ...(story.key_actors || [])].slice(0, 5),
+      }),
+    });
+    followedIds.add(story.id);
   }
+  document.querySelectorAll(`[data-follow-btn="${story.id}"]`).forEach(btn => {
+    const isF = followedIds.has(story.id);
+    btn.textContent = isF ? "📬 Following" : "📬 Follow Up";
+    btn.classList.toggle("following", isF);
+  });
+  await refreshFollowupBadge();
 }
 
 // ── Category Articles ────────────────────────────────────────
@@ -108,43 +184,25 @@ async function loadAllCategories() {
     const data = await fetch(`${API}/api/articles`).then(r => r.json());
     allArticles = data;
     renderActiveCategory();
-  } catch (err) {
-    console.error("Categories load failed", err);
-  }
+  } catch (err) { console.error("Categories load failed", err); }
 }
 
 function renderActiveCategory() {
   const grid = document.getElementById("articles-grid");
   const cat = allArticles[activeCategory];
-  if (!cat) {
-    grid.innerHTML = `<p class="placeholder-text">No articles yet for this category.</p>`;
-    return;
-  }
-  if (cat.articles.length === 0) {
+  if (!cat?.articles?.length) {
     grid.innerHTML = `<p class="placeholder-text">No articles yet. Try refreshing.</p>`;
     return;
   }
   grid.innerHTML = cat.articles.map(renderArticleCard).join("");
 }
 
-function renderTopicArticles(articles) {
-  const grid = document.getElementById("articles-grid");
-  if (!articles || articles.length === 0) {
-    grid.innerHTML = `<p class="placeholder-text">No articles yet for this watchlist. Wait for next refresh.</p>`;
-    return;
-  }
-  grid.innerHTML = articles.map(renderArticleCard).join("");
-}
-
-// ── Tab Navigation ───────────────────────────────────────────
 document.getElementById("tab-bar").addEventListener("click", e => {
   const tab = e.target.closest(".tab");
   if (!tab) return;
-  document.querySelectorAll("#tab-bar .tab").forEach(t => t.classList.remove("active"));
-  document.querySelectorAll("#topic-tab-bar .tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   tab.classList.add("active");
   activeCategory = tab.dataset.cat;
-  activeTopicId = null;
   renderActiveCategory();
 });
 
@@ -152,46 +210,42 @@ document.getElementById("tab-bar").addEventListener("click", e => {
 async function loadTopics() {
   const data = await fetch(`${API}/api/topics`).then(r => r.json());
   const topics = data.topics || [];
-
   const tabBar = document.getElementById("topic-tab-bar");
   const list = document.getElementById("topics-list");
 
-  if (topics.length === 0) {
-    tabBar.innerHTML = "";
-    list.innerHTML = `<p class="placeholder-text">No watchlists yet. Add a topic above to start tracking.</p>`;
-    return;
-  }
-
   tabBar.innerHTML = topics.map(t => `
     <button class="tab topic-tab" data-topic-id="${t.id}" onclick="viewTopic('${t.id}')">
-      ${escHtml(t.icon || "📌")} ${escHtml(t.label)}
-      <span class="remove-tab" onclick="deleteTopic(event, '${t.id}')">✕</span>
+      ${esc(t.icon || "📌")} ${esc(t.label)}
+      <span class="remove-tab" onclick="deleteTopic(event,'${t.id}')">✕</span>
     </button>`).join("");
 
+  if (!topics.length) {
+    list.innerHTML = `<p class="placeholder-text">No watchlists yet.</p>`;
+    return;
+  }
   list.innerHTML = topics.map(t => `
     <div class="topic-row">
       <div>
-        <div class="topic-row-label">${escHtml(t.icon || "📌")} ${escHtml(t.label)}</div>
-        ${t.keywords && t.keywords.length
-          ? `<div class="topic-row-keywords">${t.keywords.map(escHtml).join(", ")}</div>`
-          : ""}
+        <div class="topic-row-label">${esc(t.icon||"📌")} ${esc(t.label)}</div>
+        ${t.keywords?.length ? `<div class="topic-row-keywords">${t.keywords.map(esc).join(", ")}</div>` : ""}
       </div>
       <div class="topic-row-actions">
         <button class="btn-view" onclick="viewTopic('${t.id}')">View</button>
-        <button class="btn-del" onclick="deleteTopic(event, '${t.id}')">Remove</button>
+        <button class="btn-del" onclick="deleteTopic(event,'${t.id}')">Remove</button>
       </div>
     </div>`).join("");
 }
 
 async function viewTopic(topicId) {
-  activeTopicId = topicId;
   activeCategory = null;
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  const topicTab = document.querySelector(`[data-topic-id="${topicId}"]`);
-  if (topicTab) topicTab.classList.add("active");
-
+  document.querySelector(`[data-topic-id="${topicId}"]`)?.classList.add("active");
   const data = await fetch(`${API}/api/articles/topic_${topicId}`).then(r => r.json());
-  renderTopicArticles(data.articles || []);
+  const grid = document.getElementById("articles-grid");
+  const articles = data.articles || [];
+  grid.innerHTML = articles.length
+    ? articles.map(renderArticleCard).join("")
+    : `<p class="placeholder-text">No articles yet. Wait for next refresh.</p>`;
 }
 
 async function deleteTopic(evt, topicId) {
@@ -204,119 +258,240 @@ async function deleteTopic(evt, topicId) {
 document.getElementById("add-topic-btn").addEventListener("click", async () => {
   const label = document.getElementById("new-topic-label").value.trim();
   if (!label) { alert("Please enter a topic label."); return; }
-
-  const keywords = document.getElementById("new-topic-keywords").value
-    .split(",").map(k => k.trim()).filter(Boolean);
-  const feedUrls = document.getElementById("new-topic-feeds").value
-    .split(",").map(u => u.trim()).filter(Boolean);
-
+  const keywords = document.getElementById("new-topic-keywords").value.split(",").map(k=>k.trim()).filter(Boolean);
+  const feedUrls = document.getElementById("new-topic-feeds").value.split(",").map(u=>u.trim()).filter(Boolean);
   const btn = document.getElementById("add-topic-btn");
-  btn.textContent = "Adding...";
-  btn.disabled = true;
-
+  btn.textContent = "Adding..."; btn.disabled = true;
   try {
     await fetch(`${API}/api/topics`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label, keywords, feed_urls: feedUrls }),
     });
-    document.getElementById("new-topic-label").value = "";
-    document.getElementById("new-topic-keywords").value = "";
-    document.getElementById("new-topic-feeds").value = "";
+    ["new-topic-label","new-topic-keywords","new-topic-feeds"].forEach(id => document.getElementById(id).value = "");
     await loadTopics();
-  } finally {
-    btn.textContent = "+ Add Watchlist";
-    btn.disabled = false;
-  }
+  } finally { btn.textContent = "+ Add Watchlist"; btn.disabled = false; }
 });
 
 // ── Search ───────────────────────────────────────────────────
 async function doSearch(query) {
   if (!query.trim()) return;
-
   const panel = document.getElementById("search-panel");
   const resultsEl = document.getElementById("search-results");
   const briefingEl = document.getElementById("search-briefing");
+  const pplxEl = document.getElementById("perplexity-briefing");
   const labelEl = document.getElementById("search-query-label");
 
   panel.style.display = "block";
   labelEl.textContent = query;
-  resultsEl.innerHTML = `<div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>`;
+  resultsEl.innerHTML = `<div class="skeleton-card"></div><div class="skeleton-card"></div>`;
   briefingEl.style.display = "none";
-
+  pplxEl.style.display = "none";
   panel.scrollIntoView({ behavior: "smooth", block: "start" });
 
   try {
     const data = await fetch(`${API}/api/search?q=${encodeURIComponent(query)}`).then(r => r.json());
 
     if (data.ai_briefing) {
-      briefingEl.textContent = data.ai_briefing;
+      document.getElementById("search-briefing-text").textContent = data.ai_briefing;
       briefingEl.style.display = "block";
     }
-
-    if (!data.articles || data.articles.length === 0) {
-      resultsEl.innerHTML = `<p class="placeholder-text">No results found for "${escHtml(query)}".</p>`;
-      return;
+    if (data.perplexity_live) {
+      document.getElementById("perplexity-briefing-text").textContent = data.perplexity_live;
+      pplxEl.style.display = "block";
     }
-    resultsEl.innerHTML = data.articles.map(renderArticleCard).join("");
+
+    resultsEl.innerHTML = data.articles?.length
+      ? data.articles.map(renderArticleCard).join("")
+      : `<p class="placeholder-text">No results for "${esc(query)}".</p>`;
   } catch (err) {
     resultsEl.innerHTML = `<p class="placeholder-text">Search failed. Please try again.</p>`;
-    console.error("Search error", err);
   }
 }
 
-document.getElementById("search-btn").addEventListener("click", () => {
-  const q = document.getElementById("search-input").value;
-  doSearch(q);
-});
-document.getElementById("search-input").addEventListener("keydown", e => {
-  if (e.key === "Enter") doSearch(e.target.value);
-});
+document.getElementById("search-btn").addEventListener("click", () => doSearch(document.getElementById("search-input").value));
+document.getElementById("search-input").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(e.target.value); });
 document.getElementById("close-search").addEventListener("click", () => {
   document.getElementById("search-panel").style.display = "none";
   document.getElementById("search-input").value = "";
 });
 
+// ── Follow-up Panel ───────────────────────────────────────────
+document.getElementById("followups-nav-btn").addEventListener("click", () => {
+  const section = document.getElementById("followups-section");
+  const isVisible = section.style.display !== "none";
+  section.style.display = isVisible ? "none" : "block";
+  if (!isVisible) {
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+    loadFollowups();
+  }
+});
+document.getElementById("close-followups").addEventListener("click", () => {
+  document.getElementById("followups-section").style.display = "none";
+});
+
+document.getElementById("check-all-followups-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("check-all-followups-btn");
+  btn.textContent = "Checking..."; btn.disabled = true;
+  // Check each one (no bulk endpoint needed — just reload)
+  const data = await fetch(`${API}/api/follow`).then(r => r.json());
+  for (const story of (data.stories || [])) {
+    await fetch(`${API}/api/follow/${story.id}/check`, { method: "POST" });
+  }
+  await loadFollowups();
+  await refreshFollowupBadge();
+  btn.textContent = "↻ Check All Now"; btn.disabled = false;
+});
+
+async function loadFollowups() {
+  const data = await fetch(`${API}/api/follow`).then(r => r.json());
+  const stories = data.stories || [];
+  followedIds = new Set(stories.map(s => s.id));
+
+  const list = document.getElementById("followups-list");
+  if (!stories.length) {
+    list.innerHTML = `<p class="placeholder-text">No followed stories yet. Click "Follow Up" on any article or developing story.</p>`;
+    return;
+  }
+
+  list.innerHTML = stories.map(s => {
+    const hasUnread = s.unread_count > 0;
+    const updatesHtml = s.updates.length
+      ? s.updates.slice().reverse().map(u => `
+          <div class="followup-update${u.is_read ? "" : " unread"}">
+            <div style="white-space:pre-wrap">${esc(u.summary)}</div>
+            <div class="followup-update-time">${relativeTime(u.found_at)}</div>
+          </div>`).join("")
+      : `<p class="no-updates-yet">No updates yet. Daily check runs at 09:00 UTC via Perplexity.</p>`;
+
+    return `
+      <div class="followup-card${hasUnread ? " has-unread" : ""}" data-story-id="${s.id}">
+        <div class="followup-card-header">
+          <div>
+            <p class="followup-headline">${esc(s.headline)}</p>
+            <div class="followup-meta">
+              <span>${esc(s.source)}</span>
+              ${clfBadge(s.classification)}
+              <span>Following since ${relativeTime(s.followed_at)}</span>
+              ${s.last_checked ? `<span>Checked ${relativeTime(s.last_checked)}</span>` : ""}
+              ${hasUnread ? `<span class="unread-badge">${s.unread_count} new</span>` : ""}
+            </div>
+          </div>
+          <div class="followup-card-actions">
+            <button class="btn-check-now" onclick="checkStoryNow('${s.id}', this)">↻ Check Now</button>
+            ${s.url ? `<a href="${esc(s.url)}" class="btn-sm" target="_blank" rel="noopener">Open ↗</a>` : ""}
+            <button class="btn-unfollow" onclick="unfollowStory('${s.id}')">Unfollow</button>
+          </div>
+        </div>
+        <div class="followup-updates">${updatesHtml}</div>
+      </div>`;
+  }).join("");
+
+  // Mark read when panel opened
+  for (const s of stories) {
+    if (s.unread_count > 0) {
+      await fetch(`${API}/api/follow/${s.id}/read`, { method: "POST" });
+    }
+  }
+  await refreshFollowupBadge();
+}
+
+async function checkStoryNow(storyId, btn) {
+  btn.textContent = "Checking..."; btn.disabled = true;
+  try {
+    await fetch(`${API}/api/follow/${storyId}/check`, { method: "POST" });
+    await loadFollowups();
+  } finally { btn.textContent = "↻ Check Now"; btn.disabled = false; }
+}
+
+async function unfollowStory(storyId) {
+  if (!confirm("Stop following this story?")) return;
+  await fetch(`${API}/api/follow/${storyId}`, { method: "DELETE" });
+  followedIds.delete(storyId);
+  await loadFollowups();
+  await refreshFollowupBadge();
+  // Update any follow buttons in articles grid
+  document.querySelectorAll(`[data-follow-btn="${storyId}"]`).forEach(btn => {
+    btn.textContent = "📬 Follow";
+    btn.classList.remove("following");
+  });
+}
+
+async function refreshFollowupBadge() {
+  try {
+    const data = await fetch(`${API}/api/status`).then(r => r.json());
+    const unread = data.followups?.unread || 0;
+    const badge = document.getElementById("nav-unread-badge");
+    if (unread > 0) {
+      badge.textContent = unread;
+      badge.style.display = "inline";
+    } else {
+      badge.style.display = "none";
+    }
+  } catch {}
+}
+
+// ── Follow article helper ─────────────────────────────────────
+async function followArticle(art) {
+  await fetch(`${API}/api/follow`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      article_id: art.id,
+      headline: art.title,
+      url: art.url,
+      source: art.source,
+      category_id: art.category_id,
+      classification: art.classification || "general",
+      keywords: art.title.split(/\s+/).filter(w => w.length > 4).slice(0, 8),
+    }),
+  });
+  followedIds.add(art.id);
+}
+
 // ── Modal ────────────────────────────────────────────────────
 function openModal(articleId) {
-  // Find article in allArticles or search results
   let art = null;
   for (const cat of Object.values(allArticles)) {
     art = (cat.articles || []).find(a => a.id === articleId);
     if (art) break;
   }
-  // Also check search results grid
   if (!art) {
+    // Try search results in DOM
     const card = document.querySelector(`[data-id="${articleId}"]`);
-    if (card) {
-      // Reconstruct minimal object from DOM (fallback)
-      art = { id: articleId, title: card.querySelector(".article-title")?.textContent || "" };
-    }
+    if (!card) return;
+    art = { id: articleId, title: card.querySelector(".article-title")?.textContent || "" };
   }
 
-  if (!art) return;
   openArticle = art;
 
   document.getElementById("modal-source").textContent = art.source || "";
+  document.getElementById("modal-classification").className = `classification-badge ${(CLF_LABELS[art.classification] || CLF_LABELS.general).cls}`;
+  document.getElementById("modal-classification").textContent = (CLF_LABELS[art.classification] || CLF_LABELS.general).text;
   document.getElementById("modal-title").textContent = art.title || "";
-  document.getElementById("modal-meta").textContent =
-    art.published ? relativeTime(art.published) : "";
+  document.getElementById("modal-meta").textContent = art.published ? relativeTime(art.published) : "";
   document.getElementById("modal-summary").textContent = art.summary || "";
   document.getElementById("modal-link").href = art.url || "#";
 
-  const aiSection = document.getElementById("modal-ai-summary");
-  const aiText = document.getElementById("modal-ai-text");
+  const claudeSection = document.getElementById("modal-claude-summary");
   const aiBtn = document.getElementById("modal-ai-btn");
+  claudeSection.style.display = "none";
+  document.getElementById("modal-openai-summary").style.display = "none";
 
   if (art.ai_summary) {
-    aiText.textContent = art.ai_summary;
-    aiSection.style.display = "flex";
+    document.getElementById("modal-claude-text").textContent = art.ai_summary;
+    claudeSection.style.display = "flex";
     aiBtn.textContent = "✦ Regenerate Summary";
   } else {
-    aiSection.style.display = "none";
     aiBtn.textContent = "✦ Get AI Summary";
     aiBtn.disabled = false;
   }
+
+  // Follow button state
+  const followBtn = document.getElementById("modal-followup-btn");
+  const isFollowing = followedIds.has(art.id);
+  followBtn.textContent = isFollowing ? "📬 Following" : "📬 Follow Up";
+  followBtn.classList.toggle("following", isFollowing);
 
   document.getElementById("modal").style.display = "flex";
   document.body.style.overflow = "hidden";
@@ -329,67 +504,78 @@ function closeModal() {
 }
 
 document.getElementById("modal-close").addEventListener("click", closeModal);
-document.getElementById("modal").addEventListener("click", e => {
-  if (e.target === document.getElementById("modal")) closeModal();
-});
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeModal();
-});
+document.getElementById("modal").addEventListener("click", e => { if (e.target === document.getElementById("modal")) closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 
 document.getElementById("modal-ai-btn").addEventListener("click", async () => {
   if (!openArticle) return;
   const btn = document.getElementById("modal-ai-btn");
-  const aiSection = document.getElementById("modal-ai-summary");
-  const aiText = document.getElementById("modal-ai-text");
-
-  btn.textContent = "⏳ Summarizing...";
-  btn.disabled = true;
-
+  const claudeSection = document.getElementById("modal-claude-summary");
+  const claudeText = document.getElementById("modal-claude-text");
+  btn.textContent = "⏳ Summarizing..."; btn.disabled = true;
   try {
-    const data = await fetch(`${API}/api/summarize/${openArticle.id}`, {
-      method: "POST",
-    }).then(r => r.json());
-
-    aiText.textContent = data.summary;
-    aiSection.style.display = "flex";
+    const data = await fetch(`${API}/api/summarize/${openArticle.id}`, { method: "POST" }).then(r => r.json());
+    claudeText.textContent = data.summary;
+    claudeSection.style.display = "flex";
     openArticle.ai_summary = data.summary;
     btn.textContent = "✦ Regenerate Summary";
-  } catch (err) {
-    aiText.textContent = "Failed to generate summary. Check ANTHROPIC_API_KEY.";
-    aiSection.style.display = "flex";
+  } catch {
+    claudeText.textContent = "Failed to generate summary. Check ANTHROPIC_API_KEY.";
+    claudeSection.style.display = "flex";
     btn.textContent = "✦ Get AI Summary";
-  } finally {
-    btn.disabled = false;
-  }
+  } finally { btn.disabled = false; }
 });
 
-// ── Refresh Button ───────────────────────────────────────────
+document.getElementById("modal-followup-btn").addEventListener("click", async () => {
+  if (!openArticle) return;
+  const btn = document.getElementById("modal-followup-btn");
+  if (followedIds.has(openArticle.id)) {
+    await fetch(`${API}/api/follow/${openArticle.id}`, { method: "DELETE" });
+    followedIds.delete(openArticle.id);
+    btn.textContent = "📬 Follow Up";
+    btn.classList.remove("following");
+  } else {
+    await followArticle(openArticle);
+    btn.textContent = "📬 Following";
+    btn.classList.add("following");
+  }
+  // Sync card button
+  document.querySelectorAll(`[data-follow-btn="${openArticle.id}"]`).forEach(b => {
+    b.textContent = followedIds.has(openArticle.id) ? "📬 Following" : "📬 Follow";
+    b.classList.toggle("following", followedIds.has(openArticle.id));
+  });
+  await refreshFollowupBadge();
+});
+
+// ── Refresh button ───────────────────────────────────────────
 document.getElementById("refresh-btn").addEventListener("click", async () => {
   const btn = document.getElementById("refresh-btn");
-  btn.innerHTML = `<span class="spinning">↻</span> Refreshing...`;
-  btn.disabled = true;
+  btn.innerHTML = `<span class="spinning">↻</span> Refreshing...`; btn.disabled = true;
   try {
     await fetch(`${API}/api/refresh`, { method: "POST" });
     await Promise.all([loadHero(), loadDeveloping(), loadAllCategories()]);
     setLastRefresh(new Date().toISOString());
-  } finally {
-    btn.innerHTML = "↻ Refresh";
-    btn.disabled = false;
-  }
+  } finally { btn.innerHTML = "↻ Refresh"; btn.disabled = false; }
 });
 
-// ── Auto-refresh every 30 minutes ────────────────────────────
+// ── Auto-refresh every 30 min ────────────────────────────────
 setInterval(async () => {
   await Promise.all([loadHero(), loadDeveloping(), loadAllCategories()]);
   setLastRefresh(new Date().toISOString());
+  await refreshFollowupBadge();
 }, 30 * 60 * 1000);
 
 // ── Init ─────────────────────────────────────────────────────
 (async () => {
+  // Load follow state first so cards render correctly
+  const followData = await fetch(`${API}/api/follow`).then(r => r.json()).catch(() => ({ stories: [] }));
+  followedIds = new Set((followData.stories || []).map(s => s.id));
+
   await Promise.all([
     loadHero(),
     loadDeveloping(),
     loadAllCategories(),
     loadTopics(),
+    refreshFollowupBadge(),
   ]);
 })();

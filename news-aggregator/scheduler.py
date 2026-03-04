@@ -6,6 +6,9 @@ On each tick:
   3. Prune articles older than MAX_ARTICLES_AGE_HOURS
   4. Run AI developing-story analysis (if Claude API key is set)
   5. Compute top 3 stories from last 6 hours for the landing hero
+
+Daily at FOLLOWUP_CHECK_HOUR_UTC:
+  6. Check all followed stories for updates via Perplexity web search
 """
 
 from __future__ import annotations
@@ -16,8 +19,9 @@ from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from config import DEFAULT_CUSTOM_TOPICS, REFRESH_INTERVAL_MINUTES
+from config import DEFAULT_CUSTOM_TOPICS, FOLLOWUP_CHECK_HOUR_UTC, REFRESH_INTERVAL_MINUTES
 from fetcher import fetch_all_categories, fetch_topic_feeds, newsapi_search
+from follow_up import check_all_followups, follow_up_store
 from storage import store
 from summarizer import identify_developing_stories, pick_top_stories
 
@@ -108,7 +112,14 @@ async def refresh_all() -> None:
     logger.info("=== Refresh complete. Stats: %s ===", store.stats())
 
 
+async def run_followup_check() -> None:
+    """Daily follow-up check — called by scheduler at FOLLOWUP_CHECK_HOUR_UTC."""
+    count = await check_all_followups(follow_up_store)
+    logger.info("Daily follow-up check done: %d stories updated", count)
+
+
 def start_scheduler() -> None:
+    # Feed refresh — every REFRESH_INTERVAL_MINUTES
     scheduler.add_job(
         refresh_all,
         trigger="interval",
@@ -116,5 +127,18 @@ def start_scheduler() -> None:
         id="refresh_all",
         replace_existing=True,
     )
+    # Follow-up story check — daily at configured UTC hour
+    scheduler.add_job(
+        run_followup_check,
+        trigger="cron",
+        hour=FOLLOWUP_CHECK_HOUR_UTC,
+        minute=0,
+        id="followup_check",
+        replace_existing=True,
+    )
     scheduler.start()
-    logger.info("Scheduler started — refresh every %d minutes", REFRESH_INTERVAL_MINUTES)
+    logger.info(
+        "Scheduler started — refresh every %d min, follow-up checks daily at %02d:00 UTC",
+        REFRESH_INTERVAL_MINUTES,
+        FOLLOWUP_CHECK_HOUR_UTC,
+    )

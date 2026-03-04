@@ -183,3 +183,31 @@ MAX_ARTICLES_AGE_HOURS: int = int(os.environ.get("MAX_ARTICLES_AGE_HOURS", "48")
 PORT: int = int(os.environ.get("PORT", "8000"))
 NEWS_API_KEY: str = os.environ.get("NEWS_API_KEY", "")
 ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
+PERPLEXITY_API_KEY: str = os.environ.get("PERPLEXITY_API_KEY", "")
+OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
+
+# Which AI to use for article summaries: "claude" | "openai" | "both"
+# Perplexity is always used for follow-up story tracking (it has web search).
+SUMMARY_AI: str = os.environ.get("SUMMARY_AI", "claude")
+
+# Hour (UTC) to run the daily follow-up check via Perplexity
+FOLLOWUP_CHECK_HOUR_UTC: int = int(os.environ.get("FOLLOWUP_CHECK_HOUR_UTC", "9"))
+
+# ---------------------------------------------------------------------------
+# Classification labels — derived from category_id
+# Used to badge every article card and story card in the UI.
+# ---------------------------------------------------------------------------
+
+CATEGORY_CLASSIFICATIONS: dict[str, str] = {
+    "india_political":   "political",
+    "us_political":      "political",
+    "europe_political":  "political",
+    "india_financial":   "financial",
+    "us_financial":      "financial",
+    "europe_financial":  "financial",
+    "ops_supply_chain":  "supply_chain",
+    "search":            "search",
+}
+
+# Articles published within this many hours get the "breaking" classification
+BREAKING_THRESHOLD_HOURS: float = 2.0

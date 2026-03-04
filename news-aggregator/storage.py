@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
-from config import MAX_ARTICLES_AGE_HOURS
+from config import BREAKING_THRESHOLD_HOURS, CATEGORY_CLASSIFICATIONS, MAX_ARTICLES_AGE_HOURS
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +38,15 @@ class Article:
         pub = self.published if self.published.tzinfo else self.published.replace(tzinfo=timezone.utc)
         return (now - pub).total_seconds() / 3600
 
+    @property
+    def classification(self) -> str:
+        """Derive classification label from category and age."""
+        if self.age_hours() <= BREAKING_THRESHOLD_HOURS:
+            return "breaking"
+        if self.category_id.startswith("topic_"):
+            return "watchlist"
+        return CATEGORY_CLASSIFICATIONS.get(self.category_id, "general")
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -45,6 +54,7 @@ class Article:
             "url": self.url,
             "source": self.source,
             "category_id": self.category_id,
+            "classification": self.classification,
             "published": self.published.isoformat(),
             "summary": self.summary,
             "ai_summary": self.ai_summary,
