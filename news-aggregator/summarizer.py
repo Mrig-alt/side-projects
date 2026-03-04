@@ -206,6 +206,80 @@ Reply with ONLY a JSON array of the line numbers you selected, e.g. [3, 17, 22].
         return sorted(recent_articles, key=lambda a: a.published, reverse=True)[:n]
 
 
+async def detect_significant_stories(new_articles: list[Article]) -> list[dict]:
+    """
+    Scan freshly fetched articles for stories significant enough to warrant
+    an immediate notification (breaking, controversial, market-moving, etc.).
+
+    Only considers articles published within the last 2 hours.
+    Returns up to 3 flagged items as dicts:
+      {article_id, headline, reason, severity, category, url, source}
+
+    Called after every refresh cycle when new articles were actually added.
+    """
+    from datetime import timedelta
+
+    client = _get_client()
+    if not client or not new_articles:
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+    fresh = [
+        a for a in new_articles
+        if (a.published if a.published.tzinfo else a.published.replace(tzinfo=timezone.utc)) >= cutoff
+    ]
+    if not fresh:
+        return []
+
+    numbered = "\n".join(
+        f"{i}. [ID:{a.id}] [{a.category_id}] {a.title} — {a.source}"
+        for i, a in enumerate(fresh[:40], 1)
+    )
+
+    prompt = f"""Scan these recent news headlines and flag up to 3 that are genuinely significant right now.
+
+A story is notification-worthy if it is: breaking/urgent, highly controversial, market-moving,
+geopolitically important for India/US/Europe, or an operational shock to global supply chains.
+
+{numbered}
+
+Reply with ONLY a JSON array ([] if nothing clears the bar). Each object:
+{{
+  "article_id": "the ID shown after ID:",
+  "headline": "the title",
+  "reason": "one sentence — why this matters RIGHT NOW",
+  "severity": "high" or "medium",
+  "category": one of [political, financial, supply_chain, breaking, controversial]
+}}
+
+Be selective — flag only genuinely important developments, not routine updates.
+Most refreshes should return []."""
+
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=700,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        items = json.loads(raw)
+        # Enrich with url/source from the article store
+        id_to_article = {a.id: a for a in fresh}
+        for item in items:
+            art = id_to_article.get(item.get("article_id"))
+            if art:
+                item["url"] = art.url
+                item["source"] = art.source
+        return items[:3]
+    except Exception as exc:
+        logger.error("Significance detection failed: %s", exc)
+        return []
+
+
 async def summarize_search_results(query: str, articles: list[Article]) -> str:
     """
     Given a search query and matching articles, return an AI overview of

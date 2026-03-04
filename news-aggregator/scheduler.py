@@ -22,8 +22,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from config import DEFAULT_CUSTOM_TOPICS, FOLLOWUP_CHECK_HOUR_UTC, REFRESH_INTERVAL_MINUTES
 from fetcher import fetch_all_categories, fetch_topic_feeds, newsapi_search
 from follow_up import check_all_followups, follow_up_store
+from notifier import Alert, alert_bus
 from storage import store
-from summarizer import identify_developing_stories, pick_top_stories
+from summarizer import detect_significant_stories, identify_developing_stories, pick_top_stories
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,22 @@ async def refresh_all() -> None:
     ]
     top3 = await pick_top_stories(recent, n=3)
     _top_stories_cache = [a.to_dict() for a in top3]
+
+    # 7. Significance check — scan fresh articles for notification-worthy stories
+    if new_core > 0:
+        significant = await detect_significant_stories(core_articles)
+        for item in significant:
+            alert = Alert(
+                id=item.get("article_id", "") + "_alert",
+                headline=item.get("headline", ""),
+                reason=item.get("reason", ""),
+                severity=item.get("severity", "medium"),
+                category=item.get("category", "general"),
+                article_id=item.get("article_id"),
+                url=item.get("url"),
+                source=item.get("source"),
+            )
+            await alert_bus.publish(alert)
 
     _last_refresh = datetime.now(timezone.utc)
     logger.info("=== Refresh complete. Stats: %s ===", store.stats())

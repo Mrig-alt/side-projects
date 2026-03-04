@@ -547,6 +547,157 @@ document.getElementById("modal-followup-btn").addEventListener("click", async ()
   await refreshFollowupBadge();
 });
 
+// ── Toast notifications ──────────────────────────────────────
+const TOAST_DURATIONS = { high: 15000, medium: 9000 };
+const CATEGORY_ICONS = {
+  political: "🏛", financial: "📊", supply_chain: "🚢",
+  breaking: "⚡", controversial: "🔥", general: "📰",
+};
+
+function showToast(alert) {
+  const container = document.getElementById("toast-container");
+  const icon = CATEGORY_ICONS[alert.category] || "📰";
+  const severityLabel = alert.severity === "high" ? "⚡ Breaking Alert" : "📍 Notable Story";
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${alert.severity}`;
+  toast.setAttribute("data-alert-id", alert.id);
+  toast.innerHTML = `
+    <div class="toast-icon">${icon}</div>
+    <div class="toast-body">
+      <div class="toast-label">${severityLabel}</div>
+      <div class="toast-title">${esc(alert.headline)}</div>
+      <div class="toast-reason">${esc(alert.reason)}</div>
+    </div>
+    <button class="toast-dismiss" onclick="dismissToast(this.closest('.toast'))">✕</button>`;
+
+  // Click toast body → open article if available
+  toast.addEventListener("click", e => {
+    if (e.target.classList.contains("toast-dismiss")) return;
+    if (alert.article_id) openModal(alert.article_id);
+    dismissToast(toast);
+  });
+
+  container.prepend(toast);
+
+  const dur = TOAST_DURATIONS[alert.severity] || 9000;
+  setTimeout(() => dismissToast(toast), dur);
+}
+
+function dismissToast(toast) {
+  if (!toast || toast.classList.contains("toast-out")) return;
+  toast.classList.add("toast-out");
+  setTimeout(() => toast.remove(), 280);
+}
+
+// ── Alerts bell + history panel ──────────────────────────────
+let alertBellCount = 0;
+
+function updateAlertBell(delta = 1) {
+  alertBellCount += delta;
+  const badge = document.getElementById("alert-bell-count");
+  const bell = document.getElementById("alerts-bell-btn");
+  badge.textContent = alertBellCount;
+  badge.style.display = alertBellCount > 0 ? "block" : "none";
+  bell.classList.add("ringing");
+  setTimeout(() => bell.classList.remove("ringing"), 1100);
+}
+
+document.getElementById("alerts-bell-btn").addEventListener("click", async () => {
+  const panel = document.getElementById("alerts-panel");
+  const isOpen = panel.style.display !== "none";
+  panel.style.display = isOpen ? "none" : "flex";
+  if (!isOpen) {
+    await renderAlertsPanel();
+    alertBellCount = 0;
+    const badge = document.getElementById("alert-bell-count");
+    badge.style.display = "none";
+  }
+});
+
+document.getElementById("close-alerts-panel").addEventListener("click", () => {
+  document.getElementById("alerts-panel").style.display = "none";
+});
+
+async function renderAlertsPanel() {
+  const data = await fetch(`${API}/api/alerts`).then(r => r.json());
+  const alerts = data.alerts || [];
+  const list = document.getElementById("alerts-list");
+  if (!alerts.length) {
+    list.innerHTML = `<p class="placeholder-text">No alerts yet. Claude will flag important stories on the next refresh.</p>`;
+    return;
+  }
+  list.innerHTML = alerts.map(a => `
+    <div class="alert-card severity-${a.severity}"
+         onclick="${a.article_id ? `openModal('${a.article_id}'); document.getElementById('alerts-panel').style.display='none'` : ""}">
+      <div class="alert-card-header">
+        <span class="alert-severity-badge sev-${a.severity}">${a.severity === "high" ? "⚡ High" : "📍 Medium"}</span>
+        ${clfBadge(a.category)}
+        <span class="alert-meta">${relativeTime(a.created_at)}</span>
+      </div>
+      <p class="alert-headline">${esc(a.headline)}</p>
+      <p class="alert-reason">${esc(a.reason)}</p>
+      ${a.source ? `<p class="alert-meta">${esc(a.source)}</p>` : ""}
+    </div>`).join("");
+}
+
+// ── SSE connection (alerts stream) ───────────────────────────
+function connectAlertStream() {
+  const es = new EventSource(`${API}/api/alerts/stream`);
+
+  es.onopen = () => console.log("[alerts] SSE connected");
+
+  es.onmessage = (event) => {
+    try {
+      const alert = JSON.parse(event.data);
+      // Show toast
+      showToast(alert);
+      // Update bell count (unless panel is open)
+      const panelOpen = document.getElementById("alerts-panel").style.display !== "none";
+      if (!panelOpen) updateAlertBell(1);
+      else renderAlertsPanel();
+      // OS-level browser notification (if granted)
+      if (Notification.permission === "granted") {
+        const notif = new Notification(
+          alert.severity === "high" ? "⚡ Breaking Alert" : "📍 Intel Feed",
+          {
+            body: `${alert.headline}\n${alert.reason}`,
+            icon: "/static/favicon.png",
+            tag: alert.id,
+            renotify: true,
+          }
+        );
+        notif.onclick = () => {
+          window.focus();
+          if (alert.article_id) openModal(alert.article_id);
+          notif.close();
+        };
+      }
+    } catch (err) {
+      console.warn("[alerts] Failed to parse SSE event", err);
+    }
+  };
+
+  es.onerror = () => {
+    console.warn("[alerts] SSE disconnected — reconnecting in 10s");
+    es.close();
+    setTimeout(connectAlertStream, 10000);
+  };
+}
+
+// ── Browser notification permission ──────────────────────────
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    // Don't prompt immediately — wait for first user interaction
+    const handler = async () => {
+      await Notification.requestPermission();
+      document.removeEventListener("click", handler);
+    };
+    document.addEventListener("click", handler, { once: true });
+  }
+}
+
 // ── Refresh button ───────────────────────────────────────────
 document.getElementById("refresh-btn").addEventListener("click", async () => {
   const btn = document.getElementById("refresh-btn");
@@ -578,4 +729,10 @@ setInterval(async () => {
     loadTopics(),
     refreshFollowupBadge(),
   ]);
+
+  // Connect to live alert stream
+  connectAlertStream();
+
+  // Request browser notification permission (on first click)
+  await requestNotificationPermission();
 })();

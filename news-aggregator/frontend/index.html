@@ -21,12 +21,30 @@
     </div>
   </div>
   <div class="header-right">
+    <button class="alerts-bell-btn" id="alerts-bell-btn" title="Live alerts">
+      🔔 <span class="alert-bell-count" id="alert-bell-count" style="display:none">0</span>
+    </button>
     <button class="followup-btn" id="followups-nav-btn" title="My follow-ups">
       📬 Follow-ups <span class="unread-badge" id="nav-unread-badge" style="display:none">0</span>
     </button>
     <button class="refresh-btn" id="refresh-btn" title="Refresh all feeds">↻ Refresh</button>
   </div>
 </header>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ===== ALERTS HISTORY PANEL ===== -->
+<div class="alerts-panel" id="alerts-panel" style="display:none">
+  <div class="alerts-panel-header">
+    <span class="alerts-panel-title">🔔 Live Alerts <span class="ai-badge">Claude</span></span>
+    <button class="close-btn" id="close-alerts-panel">✕</button>
+  </div>
+  <div class="alerts-panel-hint">Claude flags breaking, controversial, or market-moving stories on every refresh.</div>
+  <div class="alerts-list" id="alerts-list">
+    <p class="placeholder-text">No alerts yet. Will appear here after the next refresh cycle.</p>
+  </div>
+</div>
 
 <!-- ===== MAIN LAYOUT ===== -->
 <main>

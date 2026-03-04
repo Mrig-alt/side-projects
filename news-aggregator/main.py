@@ -16,6 +16,8 @@ Endpoints:
   GET  /api/follow                → list followed stories + updates
   POST /api/follow/{id}/read      → mark story updates as read
   POST /api/follow/{id}/check     → trigger immediate Perplexity check
+  GET  /api/alerts                → recent significant story alerts
+  GET  /api/alerts/stream         → SSE stream — pushed on every refresh
   POST /api/refresh               → trigger immediate full refresh
   GET  /api/status                → store stats + last refresh time
 
@@ -24,20 +26,23 @@ Static frontend served from ./frontend/
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from config import CATEGORIES
 from fetcher import newsapi_search
 from follow_up import FollowedStory, check_all_followups, follow_up_store
+from notifier import alert_bus
 from perplexity import perplexity_search
 from scheduler import (
     get_last_refresh,
@@ -338,6 +343,55 @@ async def check_story_now(story_id: str):
             else None
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# Alert endpoints + SSE stream
+# ---------------------------------------------------------------------------
+
+@app.get("/api/alerts")
+async def get_alerts():
+    """Recent significant story alerts (last 20)."""
+    return {"alerts": [a.to_dict() for a in alert_bus.get_recent(20)]}
+
+
+@app.get("/api/alerts/stream")
+async def alerts_stream(request: Request):
+    """
+    Server-Sent Events stream — pushed immediately when Claude flags a
+    significant/breaking/controversial story during a refresh cycle.
+
+    Clients connect once on load and stay connected. Each event is a JSON
+    Alert object. A keepalive comment is sent every 25 seconds.
+    """
+    q = alert_bus.subscribe()
+
+    async def event_generator():
+        try:
+            # Replay last 5 alerts so a freshly-opened tab sees recent context
+            for alert in alert_bus.get_recent(5):
+                yield f"data: {json.dumps(alert.to_dict())}\n\n"
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    alert = await asyncio.wait_for(q.get(), timeout=25)
+                    yield f"data: {json.dumps(alert.to_dict())}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            alert_bus.unsubscribe(q)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
