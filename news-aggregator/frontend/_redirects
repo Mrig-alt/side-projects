@@ -1,0 +1,17 @@
+# Cloudflare Pages — proxy /api/* to your backend
+#
+# HOW TO USE:
+#   1. Replace BACKEND_URL below with your backend's public URL
+#      - Oracle Cloud:  http://YOUR_ORACLE_IP  (or https://your-domain.com)
+#      - Fly.io:        https://personal-intel-feed.fly.dev
+#
+#   2. Deploy your frontend/ folder to Cloudflare Pages
+#      (Pages > Create project > Upload assets, or connect GitHub repo)
+#
+#   3. The frontend uses relative /api/* paths — Cloudflare transparently
+#      proxies them to your backend via the rule below.
+#
+# The 200 status code means a transparent proxy (not a redirect).
+# The :splat captures everything after /api/ and forwards it.
+
+/api/*  https://YOUR_BACKEND_URL/api/:splat  200

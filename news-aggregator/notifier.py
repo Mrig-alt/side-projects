@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+import persistence
+
 logger = logging.getLogger(__name__)
 
 
@@ -91,6 +93,32 @@ class AlertBus:
                 q.put_nowait(alert)
             except asyncio.QueueFull:
                 pass
+        await persistence.save_alert(alert)
+
+    async def load_from_db(self) -> None:
+        """Load recent alerts from SQLite on startup (for SSE replay to new clients)."""
+        rows = await persistence.load_alerts(limit=self._max_recent)
+        for row in rows:
+            created_at = datetime.fromisoformat(row["created_at"])
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            alert = Alert(
+                id=row["id"],
+                headline=row["headline"],
+                reason=row["reason"],
+                severity=row["severity"],
+                category=row["category"],
+                article_id=row.get("article_id"),
+                url=row.get("url"),
+                source=row.get("source"),
+                created_at=created_at,
+            )
+            self._seen_ids.add(alert.id)
+            self._recent.append(alert)
+        # Keep chronological order (load_alerts returns DESC)
+        self._recent.sort(key=lambda a: a.created_at)
+        if rows:
+            logger.info("Loaded %d recent alerts from DB", len(rows))
 
     def get_recent(self, limit: int = 20) -> list[Alert]:
         return list(reversed(self._recent[-limit:]))

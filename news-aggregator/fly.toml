@@ -1,0 +1,40 @@
+# Fly.io deployment config for Personal Intelligence Feed
+# Deploy with: fly deploy
+# First-time setup: fly launch --no-deploy (then `fly deploy`)
+#
+# Free tier: 3 shared VMs included — this uses 1.
+# CRITICAL: min_machines_running = 1 keeps APScheduler alive.
+#            Without it the machine sleeps and your daily follow-up checks die.
+
+app = "personal-intel-feed"   # change to your chosen app name
+primary_region = "sin"        # sin=Singapore | bom=Mumbai | lhr=London | iad=Virginia
+
+[build]
+  # Uses Dockerfile if present, else nixpacks auto-detection
+
+[env]
+  PORT = "8080"
+  # DATABASE_PATH is set via fly secrets (see below)
+
+[http_service]
+  internal_port       = 8080
+  force_https         = true
+  auto_stop_machines  = false   # MUST be false — keeps scheduler alive
+  auto_start_machines = true
+  min_machines_running = 1      # Always keep at least one machine running
+
+  [http_service.concurrency]
+    type       = "requests"
+    hard_limit = 50
+    soft_limit = 25
+
+[[vm]]
+  cpu_kind   = "shared"
+  cpus       = 1
+  memory_mb  = 512   # enough for Python + RSS feeds + AI calls
+
+[mounts]
+  # Persistent volume for SQLite database — survives deploys and restarts
+  # Create with: fly volumes create feed_data --size 1 --region sin
+  source      = "feed_data"
+  destination = "/app/data"

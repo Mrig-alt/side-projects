@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+import persistence
 from config import BREAKING_THRESHOLD_HOURS, CATEGORY_CLASSIFICATIONS, MAX_ARTICLES_AGE_HOURS
 
 
@@ -160,6 +161,7 @@ class ArticleStore:
     async def upsert_custom_topic(self, topic: dict) -> None:
         async with self._lock:
             self._custom_topics[topic["id"]] = topic
+        await persistence.save_topic(topic)
 
     async def delete_custom_topic(self, topic_id: str) -> bool:
         async with self._lock:
@@ -167,7 +169,23 @@ class ArticleStore:
                 return False
             del self._custom_topics[topic_id]
             self._by_topic.pop(topic_id, None)
-            return True
+        await persistence.delete_topic(topic_id)
+        return True
+
+    async def load_from_db(self) -> None:
+        """Load custom topics from SQLite on startup."""
+        from config import Feed
+        rows = await persistence.load_custom_topics()
+        for row in rows:
+            feeds = [Feed(name=url, url=url) for url in row.get("feed_urls", [])]
+            topic = {
+                "id": row["id"],
+                "label": row["label"],
+                "icon": row["icon"],
+                "keywords": row["keywords"],
+                "feeds": feeds,
+            }
+            self._custom_topics[topic["id"]] = topic
 
     async def prune_old_articles(self) -> int:
         """Remove articles older than MAX_ARTICLES_AGE_HOURS. Returns count removed."""

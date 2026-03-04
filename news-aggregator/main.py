@@ -39,6 +39,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import persistence
 from config import CATEGORIES
 from fetcher import newsapi_search
 from follow_up import FollowedStory, check_all_followups, follow_up_store
@@ -68,7 +69,12 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting up — running initial fetch...")
+    logger.info("Starting up — initialising database...")
+    await persistence.init_db()
+    await store.load_from_db()
+    await follow_up_store.load_from_db()
+    await alert_bus.load_from_db()
+    logger.info("Running initial fetch...")
     await refresh_all()
     start_scheduler()
     yield

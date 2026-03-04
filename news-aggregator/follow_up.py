@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+import persistence
 from perplexity import check_story_updates
 
 logger = logging.getLogger(__name__)
@@ -92,14 +93,16 @@ class FollowUpStore:
                 return False
             self._stories[story.id] = story
             logger.info("Now following: %s", story.headline[:60])
-            return True
+        await persistence.save_followed_story(story)
+        return True
 
     async def unfollow(self, story_id: str) -> bool:
         async with self._lock:
             if story_id not in self._stories:
                 return False
             del self._stories[story_id]
-            return True
+        await persistence.delete_followed_story(story_id)
+        return True
 
     def get(self, story_id: str) -> Optional[FollowedStory]:
         return self._stories.get(story_id)
@@ -111,13 +114,17 @@ class FollowUpStore:
         return sum(s.unread_count for s in self._stories.values())
 
     async def add_update(self, story_id: str, summary: str) -> bool:
+        now = datetime.now(timezone.utc)
         async with self._lock:
             story = self._stories.get(story_id)
             if not story:
                 return False
-            story.updates.append(StoryUpdate(summary=summary))
-            story.last_checked = datetime.now(timezone.utc)
-            return True
+            update = StoryUpdate(summary=summary, found_at=now)
+            story.updates.append(update)
+            story.last_checked = now
+        await persistence.save_story_update(story_id, summary, now, False)
+        await persistence.update_story_last_checked(story_id, now)
+        return True
 
     async def mark_read(self, story_id: str) -> bool:
         async with self._lock:
@@ -126,13 +133,57 @@ class FollowUpStore:
                 return False
             for update in story.updates:
                 update.is_read = True
-            return True
+        await persistence.mark_story_updates_read(story_id)
+        return True
 
     async def set_last_checked(self, story_id: str) -> None:
+        now = datetime.now(timezone.utc)
         async with self._lock:
             story = self._stories.get(story_id)
             if story:
-                story.last_checked = datetime.now(timezone.utc)
+                story.last_checked = now
+        await persistence.update_story_last_checked(story_id, now)
+
+    async def load_from_db(self) -> None:
+        """Restore followed stories and their updates from SQLite on startup."""
+        rows = await persistence.load_followed_stories()
+        for row in rows:
+            followed_at = datetime.fromisoformat(row["followed_at"])
+            if followed_at.tzinfo is None:
+                followed_at = followed_at.replace(tzinfo=timezone.utc)
+
+            last_checked = None
+            if row.get("last_checked"):
+                last_checked = datetime.fromisoformat(row["last_checked"])
+                if last_checked.tzinfo is None:
+                    last_checked = last_checked.replace(tzinfo=timezone.utc)
+
+            updates = []
+            for u in row.get("updates", []):
+                found_at = datetime.fromisoformat(u["found_at"])
+                if found_at.tzinfo is None:
+                    found_at = found_at.replace(tzinfo=timezone.utc)
+                updates.append(StoryUpdate(
+                    summary=u["summary"],
+                    found_at=found_at,
+                    is_read=u["is_read"],
+                ))
+
+            story = FollowedStory(
+                id=row["id"],
+                headline=row["headline"],
+                url=row["url"],
+                source=row["source"],
+                category_id=row["category_id"],
+                classification=row["classification"],
+                followed_at=followed_at,
+                keywords=row["keywords"],
+                updates=updates,
+                last_checked=last_checked,
+            )
+            self._stories[story.id] = story
+        if rows:
+            logger.info("Loaded %d followed stories from DB", len(rows))
 
 
 # ---------------------------------------------------------------------------
