@@ -13,12 +13,17 @@ The frontend shows OS-level browser notifications + in-app toasts.
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
 import persistence
+
+_VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
+_VAPID_EMAIL = os.getenv("VAPID_EMAIL", "mailto:admin@localhost")
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +99,54 @@ class AlertBus:
             except asyncio.QueueFull:
                 pass
         await persistence.save_alert(alert)
+        # Fire-and-forget — don't block SSE delivery waiting for push
+        asyncio.create_task(self._send_web_push(alert))
+
+    async def _send_web_push(self, alert: "Alert") -> None:
+        """Send Web Push notifications to all subscribed devices."""
+        if not _VAPID_PRIVATE_KEY:
+            return
+        subscriptions = await persistence.load_push_subscriptions()
+        if not subscriptions:
+            return
+
+        payload = _json.dumps({
+            "id": alert.id,
+            "headline": alert.headline,
+            "reason": alert.reason,
+            "severity": alert.severity,
+            "url": alert.url or "/",
+            "article_id": alert.article_id,
+        })
+
+        expired_endpoints: list[str] = []
+
+        def _send_one(sub_info: dict) -> Optional[str]:
+            try:
+                from pywebpush import WebPushException, webpush
+                webpush(
+                    subscription_info=sub_info,
+                    data=payload,
+                    vapid_private_key=_VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": _VAPID_EMAIL},
+                    content_encoding="aes128gcm",
+                    ttl=3600,
+                )
+            except Exception as exc:
+                resp = getattr(exc, "response", None)
+                if resp is not None and resp.status_code in (404, 410):
+                    return sub_info.get("endpoint")  # expired — caller will delete
+                logger.warning("Web push send failed: %s", exc)
+            return None
+
+        loop = asyncio.get_event_loop()
+        for sub in subscriptions:
+            expired = await loop.run_in_executor(None, _send_one, sub)
+            if expired:
+                expired_endpoints.append(expired)
+
+        for ep in expired_endpoints:
+            await persistence.delete_push_subscription(ep)
 
     async def load_from_db(self) -> None:
         """Load recent alerts from SQLite on startup (for SSE replay to new clients)."""

@@ -685,13 +685,62 @@ function connectAlertStream() {
   };
 }
 
+// ── Service worker + Web Push ─────────────────────────────────
+
+function urlBase64ToUint8Array(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const base64 = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return null;
+  try {
+    const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    return reg;
+  } catch (err) {
+    console.warn("[SW] Registration failed:", err);
+    return null;
+  }
+}
+
+async function subscribeToPush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  try {
+    const { vapid_public_key } = await fetch(`${API}/api/config`).then(r => r.json());
+    if (!vapid_public_key) return; // VAPID not configured on server
+
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) return; // already subscribed
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapid_public_key),
+    });
+    await fetch(`${API}/api/push/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sub.toJSON()),
+    });
+    console.log("[Push] Subscribed — alerts will arrive even when tab is closed");
+  } catch (err) {
+    console.warn("[Push] Subscribe failed:", err);
+  }
+}
+
 // ── Browser notification permission ──────────────────────────
 async function requestNotificationPermission() {
   if (!("Notification" in window)) return;
-  if (Notification.permission === "default") {
-    // Don't prompt immediately — wait for first user interaction
+  if (Notification.permission === "granted") {
+    // Already granted — just ensure push subscription is active
+    await subscribeToPush();
+  } else if (Notification.permission === "default") {
+    // Wait for first user interaction, then ask
     const handler = async () => {
-      await Notification.requestPermission();
+      const result = await Notification.requestPermission();
+      if (result === "granted") await subscribeToPush();
       document.removeEventListener("click", handler);
     };
     document.addEventListener("click", handler, { once: true });
@@ -718,6 +767,9 @@ setInterval(async () => {
 
 // ── Init ─────────────────────────────────────────────────────
 (async () => {
+  // Register service worker early so it's ready when we subscribe to push
+  await registerServiceWorker();
+
   // Load follow state first so cards render correctly
   const followData = await fetch(`${API}/api/follow`).then(r => r.json()).catch(() => ({ stories: [] }));
   followedIds = new Set((followData.stories || []).map(s => s.id));

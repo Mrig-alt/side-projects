@@ -401,6 +401,36 @@ async def alerts_stream(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# PWA / Web Push
+# ---------------------------------------------------------------------------
+
+@app.get("/api/config")
+async def get_config():
+    """Public client config — VAPID public key for push subscription setup."""
+    return {"vapid_public_key": os.getenv("VAPID_PUBLIC_KEY")}
+
+
+class PushSubscription(BaseModel):
+    endpoint: str
+    keys: dict
+    expirationTime: object = None
+
+
+@app.post("/api/push/subscribe", status_code=201)
+async def push_subscribe(body: PushSubscription):
+    """Register a browser push subscription (called after user grants notification permission)."""
+    await persistence.save_push_subscription(body.model_dump())
+    return {"status": "subscribed"}
+
+
+@app.delete("/api/push/subscribe")
+async def push_unsubscribe(body: PushSubscription):
+    """Remove a push subscription."""
+    await persistence.delete_push_subscription(body.endpoint)
+    return {"status": "unsubscribed"}
+
+
+# ---------------------------------------------------------------------------
 # Control
 # ---------------------------------------------------------------------------
 

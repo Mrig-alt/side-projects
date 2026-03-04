@@ -72,6 +72,12 @@ CREATE TABLE IF NOT EXISTS alerts (
     source      TEXT,
     created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint    TEXT PRIMARY KEY,
+    subscription TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
 """
 
 
@@ -247,6 +253,42 @@ async def load_alerts(limit: int = 200) -> list[dict]:
             rows = await cursor.fetchall()
     return [dict(row) for row in rows]
 
+
+# ---------------------------------------------------------------------------
+# Push subscriptions
+# ---------------------------------------------------------------------------
+
+async def load_push_subscriptions() -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT subscription FROM push_subscriptions") as cursor:
+            rows = await cursor.fetchall()
+    return [json.loads(row["subscription"]) for row in rows]
+
+
+async def save_push_subscription(subscription: dict) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """INSERT OR REPLACE INTO push_subscriptions (endpoint, subscription, created_at)
+               VALUES (?, ?, ?)""",
+            (
+                subscription["endpoint"],
+                json.dumps(subscription),
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        await db.commit()
+
+
+async def delete_push_subscription(endpoint: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+        await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Alerts
+# ---------------------------------------------------------------------------
 
 async def save_alert(alert) -> None:
     """Persist an Alert dataclass instance."""
