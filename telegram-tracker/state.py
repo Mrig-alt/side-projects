@@ -10,5 +10,11 @@ class ChecklistSession:
     planned_indices: list | None = None  # for evening: maps display index → real task index
 
 
-# Keyed by chat_id — only one active session per chat at a time
+@dataclass
+class PendingAdd:
+    name: str  # task name waiting for type selection (recurring / one-off)
+
+
+# Keyed by chat_id
 sessions: dict[int, ChecklistSession] = {}
+pending_adds: dict[int, PendingAdd] = {}

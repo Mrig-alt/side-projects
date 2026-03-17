@@ -1,7 +1,7 @@
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from config import PROGRESS_FILE, POLL_INDEX_FILE, load_tasks
+from config import PROGRESS_FILE, POLL_INDEX_FILE, load_tasks, load_task_objects, save_task_objects
 
 
 def _load(path: Path) -> dict:
@@ -60,7 +60,6 @@ def mark_evening_poll_sent(poll_id: str, planned_indices: list[int] | None) -> N
 
 
 def get_planned_tasks_for_today() -> list[int] | None:
-    """Return today's morning poll selections (task indices), or None if not answered."""
     today = date.today().isoformat()
     progress = _load(PROGRESS_FILE)
     return progress.get(today, {}).get("morning", {}).get("planned_task_indices")
@@ -82,14 +81,6 @@ def record_evening_vote(
     poll_id: str,
     selected_poll_indices: list[int],
 ) -> tuple[int, list[str]]:
-    """
-    Record evening completion vote.
-
-    selected_poll_indices are positions within the evening poll options
-    (which may be a subset of all tasks if a morning poll was answered).
-
-    Returns (percentage, completed_task_names).
-    """
     info = lookup_poll(poll_id)
     if not info:
         return 0, []
@@ -98,7 +89,7 @@ def record_evening_vote(
     tasks = load_tasks()
     progress = _load(PROGRESS_FILE)
     evening = progress.get(day, {}).get("evening", {})
-    planned = evening.get("planned_task_indices")  # original task indices
+    planned = evening.get("planned_task_indices")
 
     if planned is not None:
         actual_indices = [planned[i] for i in selected_poll_indices if i < len(planned)]
@@ -119,6 +110,35 @@ def record_evening_vote(
     })
     _save(PROGRESS_FILE, progress)
     return pct, completed_names
+
+
+def update_task_stats(
+    all_original_indices: list[int],
+    completed_original_indices: list[int],
+) -> list[str]:
+    """
+    Increment completed/missed counts for tasks that appeared in the evening checklist.
+    Removes completed one-off tasks from tasks.json.
+    Returns the names of any one-off tasks that were removed.
+    """
+    tasks = load_task_objects()
+    completed_set = set(completed_original_indices)
+    removed_names = []
+    kept = []
+
+    for i, task in enumerate(tasks):
+        if i in all_original_indices:
+            if i in completed_set:
+                task["completed"] = task.get("completed", 0) + 1
+                if task.get("type") == "one-off":
+                    removed_names.append(task["name"])
+                    continue  # drop from list
+            else:
+                task["missed"] = task.get("missed", 0) + 1
+        kept.append(task)
+
+    save_task_objects(kept)
+    return removed_names
 
 
 def get_weekly_summary() -> str:
