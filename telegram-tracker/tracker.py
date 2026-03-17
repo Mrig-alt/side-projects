@@ -133,7 +133,7 @@ def update_task_stats(
                 if task.get("type") == "one-off":
                     removed_names.append(task["name"])
                     continue  # drop from list
-            else:
+            elif task.get("type") == "recurring":
                 task["missed"] = task.get("missed", 0) + 1
         kept.append(task)
 
