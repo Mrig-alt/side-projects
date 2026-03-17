@@ -17,7 +17,7 @@ Commands (in Telegram):
 import sys
 import asyncio
 from telegram import Bot
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 from config import TELEGRAM_BOT_TOKEN
 
 
@@ -54,6 +54,7 @@ def main() -> None:
 
     from handlers import (
         handle_callback,
+        handle_text_message,
         cmd_tasks,
         cmd_addtask,
         cmd_edittask,
@@ -70,6 +71,8 @@ def main() -> None:
     app.add_handler(CommandHandler("edittask", cmd_edittask))
     app.add_handler(CommandHandler("removetask", cmd_removetask))
     app.add_handler(CommandHandler("summary", cmd_summary))
+    # Handles date/time text input during /addtask deadline or birthday flow
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
     setup_jobs(app)
 

@@ -78,3 +78,33 @@ async def send_text_message(context: ContextTypes.DEFAULT_TYPE, text: str) -> No
         text=text,
         parse_mode="Markdown",
     )
+
+
+async def send_countdown_alerts(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Sends a message listing any tasks whose due date is within
+    COUNTDOWN_THRESHOLD_DAYS days. Silently skips if nothing is due soon.
+    """
+    from config import COUNTDOWN_THRESHOLD_DAYS, load_task_objects
+    from google_cal import days_until, countdown_label
+
+    tasks = load_task_objects()
+    alerts = []
+
+    for t in tasks:
+        if not t.get("due_date"):
+            continue
+        subtype = t.get("task_subtype", "deadline")
+        days = days_until(t["due_date"], subtype)
+        if 0 <= days <= COUNTDOWN_THRESHOLD_DAYS:
+            icon = "🎂" if subtype == "birthday" else "📌"
+            time_part = f" at {t['due_time']}" if t.get("due_time") else ""
+            alerts.append(
+                f"{icon} *{t['name']}*{time_part} — {countdown_label(days)}"
+            )
+
+    if alerts:
+        text = "⏰ *Upcoming reminders:*\n" + "\n".join(alerts)
+        await context.bot.send_message(
+            chat_id=TELEGRAM_CHAT_ID, text=text, parse_mode="Markdown"
+        )

@@ -12,7 +12,11 @@ class ChecklistSession:
 
 @dataclass
 class PendingAdd:
-    name: str  # task name waiting for type selection (recurring / one-off)
+    name: str  # task name waiting for type selection
+    task_subtype: str | None = None   # 'recurring'|'one-off'|'deadline'|'birthday'
+    due_date: str | None = None       # YYYY-MM-DD
+    due_time: str | None = None       # HH:MM (24h), optional
+    awaiting: str | None = None       # 'date'|'time' — next expected user input
 
 
 # Keyed by chat_id

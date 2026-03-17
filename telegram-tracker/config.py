@@ -12,6 +12,10 @@ MORNING_POLL_TIME = os.getenv("MORNING_POLL_TIME", "08:00")
 EVENING_POLL_TIME = os.getenv("EVENING_POLL_TIME", "21:00")
 TIMEZONE = os.getenv("TIMEZONE", "UTC")
 
+# Google Calendar (optional — bot works without this)
+GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials.json")
+COUNTDOWN_THRESHOLD_DAYS = int(os.getenv("COUNTDOWN_THRESHOLD_DAYS", "10"))
+
 TASKS_FILE = Path(__file__).parent / "tasks.json"
 PROGRESS_FILE = Path(__file__).parent / "progress.json"
 POLL_INDEX_FILE = Path(__file__).parent / "poll_index.json"
