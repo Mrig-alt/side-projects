@@ -130,11 +130,16 @@ def update_task_stats(
         if i in all_original_indices:
             if i in completed_set:
                 task["completed"] = task.get("completed", 0) + 1
-                if task.get("type") == "one-off":
+                if task.get("type") == "recurring":
+                    task["current_streak"] = task.get("current_streak", 0) + 1
+                    if task["current_streak"] > task.get("best_streak", 0):
+                        task["best_streak"] = task["current_streak"]
+                elif task.get("type") == "one-off":
                     removed_names.append(task["name"])
                     continue  # drop from list
             elif task.get("type") == "recurring":
                 task["missed"] = task.get("missed", 0) + 1
+                task["current_streak"] = 0
         kept.append(task)
 
     save_task_objects(kept)

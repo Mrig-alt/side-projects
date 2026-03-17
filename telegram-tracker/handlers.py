@@ -105,12 +105,19 @@ async def cmd_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     lines = []
     for i, t in enumerate(tasks):
-        icon = "🔁" if t.get("type") == "recurring" else "1️⃣"
-        done = t.get("completed", 0)
-        missed = t.get("missed", 0)
-        total = done + missed
-        streak = f"✅{done} ❌{missed}" if total else "no data yet"
-        lines.append(f"{i + 1}. {icon} {t['name']} — {streak}")
+        if t.get("type") == "recurring":
+            icon = "🔁"
+            done = t.get("completed", 0)
+            missed = t.get("missed", 0)
+            cs = t.get("current_streak", 0)
+            bs = t.get("best_streak", 0)
+            streak = f" 🔥{cs}" if cs > 1 else ""
+            best = f" _(best: {bs})_" if bs > cs and bs > 1 else ""
+            stats = f"✅{done} ❌{missed}{streak}{best}" if (done + missed) else "no data yet"
+        else:
+            icon = "1️⃣"
+            stats = "pending"
+        lines.append(f"{i + 1}. {icon} {t['name']} — {stats}")
     await update.message.reply_text(
         "📋 *Your tasks:*\n" + "\n".join(lines),
         parse_mode="Markdown",
@@ -146,6 +153,26 @@ async def cmd_removetask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     removed = tasks.pop(idx)
     save_task_objects(tasks)
     await update.message.reply_text(f"🗑 Removed: _{removed['name']}_", parse_mode="Markdown")
+
+
+async def cmd_edittask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/edittask <number> <new name>"""
+    if len(context.args) < 2 or not context.args[0].isdigit():
+        await update.message.reply_text("Usage: /edittask 3 New task name")
+        return
+    idx = int(context.args[0]) - 1
+    new_name = " ".join(context.args[1:]).strip()
+    tasks = load_task_objects()
+    if idx < 0 or idx >= len(tasks):
+        await update.message.reply_text(f"No task #{idx + 1}. Use /tasks to see the list.")
+        return
+    old_name = tasks[idx]["name"]
+    tasks[idx]["name"] = new_name
+    save_task_objects(tasks)
+    await update.message.reply_text(
+        f"✏️ _{old_name}_ → _{new_name}_",
+        parse_mode="Markdown",
+    )
 
 
 async def cmd_summary(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

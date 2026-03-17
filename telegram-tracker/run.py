@@ -56,6 +56,7 @@ def main() -> None:
         handle_callback,
         cmd_tasks,
         cmd_addtask,
+        cmd_edittask,
         cmd_removetask,
         cmd_summary,
     )
@@ -66,6 +67,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(CommandHandler("tasks", cmd_tasks))
     app.add_handler(CommandHandler("addtask", cmd_addtask))
+    app.add_handler(CommandHandler("edittask", cmd_edittask))
     app.add_handler(CommandHandler("removetask", cmd_removetask))
     app.add_handler(CommandHandler("summary", cmd_summary))
 
