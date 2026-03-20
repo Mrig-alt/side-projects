@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from config import PROGRESS_FILE, POLL_INDEX_FILE, load_tasks
+import excel_store
 
 
 def _load(path: Path) -> dict:
@@ -70,12 +71,17 @@ def record_morning_vote(msg_id: str, selected_indices: list[int]) -> None:
     info = lookup_poll(msg_id)
     if not info:
         return
+    day = info["date"]
     progress = _load(PROGRESS_FILE)
-    progress.setdefault(info["date"], {}).setdefault("morning", {}).update({
+    progress.setdefault(day, {}).setdefault("morning", {}).update({
         "planned_task_indices": selected_indices,
         "voted_at": datetime.now().isoformat(),
     })
     _save(PROGRESS_FILE, progress)
+
+    # Mirror to Excel so Make.com / OneDrive can read it
+    tasks = load_tasks()
+    excel_store.write_morning_selections(day, tasks, selected_indices)
 
 
 def record_evening_vote(
@@ -119,6 +125,10 @@ def record_evening_vote(
         "status": "completed",
     })
     _save(PROGRESS_FILE, progress)
+
+    # Mirror to Excel so Make.com / OneDrive can read it
+    excel_store.write_evening_completions(day, tasks, actual_indices, pct)
+
     return pct, completed_names
 
 
