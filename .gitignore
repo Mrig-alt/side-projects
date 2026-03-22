@@ -4,3 +4,4 @@ __pycache__/
 .env
 progress.json
 poll_index.json
+bot.log
