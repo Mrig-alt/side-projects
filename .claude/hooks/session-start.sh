@@ -6,9 +6,9 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-TRACKER_DIR="$CLAUDE_PROJECT_DIR/whatsapp-tracker"
+TRACKER_DIR="$CLAUDE_PROJECT_DIR/telegram-tracker"
 
-echo "Installing whatsapp-tracker Python dependencies..."
+echo "Installing telegram-tracker Python dependencies..."
 pip install -r "$TRACKER_DIR/requirements.txt" --quiet
 
 # Ensure PYTHONPATH includes the tracker directory so modules resolve correctly
