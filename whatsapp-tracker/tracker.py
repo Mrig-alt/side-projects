@@ -17,10 +17,13 @@ def _save(path: Path, data: dict) -> None:
 
 # ── Poll index: msg_id → {date, type} ────────────────────────────────────────
 
-def register_poll(msg_id: str, poll_type: str, day: str = None) -> None:
+def register_poll(msg_id: str, poll_type: str, day: str = None, task_ids: list[str] | None = None) -> None:
     day = day or date.today().isoformat()
     index = _load(POLL_INDEX_FILE)
-    index[msg_id] = {"date": day, "type": poll_type}
+    entry: dict = {"date": day, "type": poll_type}
+    if task_ids is not None:
+        entry["task_ids"] = task_ids  # Todoist task IDs in poll-option order
+    index[msg_id] = entry
     _save(POLL_INDEX_FILE, index)
 
 
@@ -30,28 +33,31 @@ def lookup_poll(msg_id: str) -> dict | None:
 
 # ── Progress ──────────────────────────────────────────────────────────────────
 
-def mark_morning_poll_sent(msg_id: str) -> None:
+def mark_morning_poll_sent(msg_id: str, task_ids: list[str] | None = None) -> None:
     day = date.today().isoformat()
-    register_poll(msg_id, "morning", day)
+    register_poll(msg_id, "morning", day, task_ids=task_ids)
     progress = _load(PROGRESS_FILE)
     progress.setdefault(day, {})["morning"] = {
         "poll_msg_id": msg_id,
         "sent_at": datetime.now().isoformat(),
         "planned_task_indices": None,
+        "planned_task_ids": None,
         "voted_at": None,
     }
     _save(PROGRESS_FILE, progress)
 
 
-def mark_evening_poll_sent(msg_id: str, planned_indices: list[int] | None) -> None:
+def mark_evening_poll_sent(msg_id: str, planned_indices: list[int] | None, task_ids: list[str] | None = None) -> None:
     day = date.today().isoformat()
-    register_poll(msg_id, "evening", day)
+    register_poll(msg_id, "evening", day, task_ids=task_ids)
     progress = _load(PROGRESS_FILE)
     progress.setdefault(day, {})["evening"] = {
         "poll_msg_id": msg_id,
         "sent_at": datetime.now().isoformat(),
         "planned_task_indices": planned_indices,
+        "planned_task_ids": None,
         "completed_task_indices": None,
+        "completed_task_ids": None,
         "completed_task_names": None,
         "percentage": None,
         "voted_at": None,
@@ -72,9 +78,17 @@ def record_morning_vote(msg_id: str, selected_indices: list[int]) -> None:
     if not info:
         return
     day = info["date"]
+    task_ids = info.get("task_ids")
+
+    # Resolve Todoist task IDs for selected options
+    planned_task_ids = None
+    if task_ids:
+        planned_task_ids = [task_ids[i] for i in selected_indices if i < len(task_ids)]
+
     progress = _load(PROGRESS_FILE)
     progress.setdefault(day, {}).setdefault("morning", {}).update({
         "planned_task_indices": selected_indices,
+        "planned_task_ids": planned_task_ids,
         "voted_at": datetime.now().isoformat(),
     })
     _save(PROGRESS_FILE, progress)
@@ -96,12 +110,15 @@ def record_evening_vote(
 
     Returns (percentage, completed_task_names).
     """
+    from config import TODOIST_CLOSE_ON_COMPLETE
+
     info = lookup_poll(msg_id)
     if not info:
         return 0, []
 
     day = info["date"]
     tasks = load_tasks()
+    task_ids = info.get("task_ids")  # Todoist task IDs in poll-option order
     progress = _load(PROGRESS_FILE)
     evening = progress.get(day, {}).get("evening", {})
     planned = evening.get("planned_task_indices")  # original task indices
@@ -117,14 +134,31 @@ def record_evening_vote(
     pct = round(len(actual_indices) / denominator * 100) if denominator else 0
     completed_names = [tasks[i] for i in actual_indices if i < len(tasks)]
 
+    # Resolve completed Todoist task IDs
+    completed_task_ids = None
+    if task_ids:
+        completed_task_ids = [
+            task_ids[i] for i in selected_poll_indices if i < len(task_ids)
+        ]
+
     progress.setdefault(day, {}).setdefault("evening", {}).update({
         "completed_task_indices": actual_indices,
+        "completed_task_ids": completed_task_ids,
         "completed_task_names": completed_names,
         "percentage": pct,
         "voted_at": datetime.now().isoformat(),
         "status": "completed",
     })
     _save(PROGRESS_FILE, progress)
+
+    # Close completed tasks in Todoist if configured
+    if completed_task_ids and TODOIST_CLOSE_ON_COMPLETE:
+        try:
+            import todoist
+            for tid in completed_task_ids:
+                todoist.close_todoist_task(tid)
+        except Exception as e:
+            print(f"[warn] Todoist close failed: {e}")
 
     # Mirror to Excel so Make.com / OneDrive can read it
     excel_store.write_evening_completions(day, tasks, actual_indices, pct)

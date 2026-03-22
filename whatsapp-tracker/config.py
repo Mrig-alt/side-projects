@@ -15,6 +15,11 @@ EVENING_POLL_TIME = os.getenv("EVENING_POLL_TIME", "21:00")
 TIMEZONE = os.getenv("TIMEZONE", "UTC")
 WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", "5000"))
 
+TODOIST_API_TOKEN = os.getenv("TODOIST_API_TOKEN", "")
+TODOIST_PROJECT_NAME = os.getenv("TODOIST_PROJECT_NAME", "Inbox")
+TODOIST_TASK_LIMIT = int(os.getenv("TODOIST_TASK_LIMIT", "10"))
+TODOIST_CLOSE_ON_COMPLETE = os.getenv("TODOIST_CLOSE_ON_COMPLETE", "true").lower() == "true"
+
 GRAPH_API_VERSION = "v20.0"
 GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 

@@ -5,6 +5,7 @@ from config import (
     WHATSAPP_PHONE_NUMBER_ID,
     MY_NUMBER,
     GRAPH_API_BASE,
+    TODOIST_API_TOKEN,
     load_tasks,
 )
 from tracker import (
@@ -73,16 +74,36 @@ def send_text_message(body: str) -> None:
 
 # ── Scheduled polls ───────────────────────────────────────────────────────────
 
+def _load_poll_tasks() -> tuple[list[str], list[str] | None]:
+    """
+    Return (task_names, task_ids).
+
+    If TODOIST_API_TOKEN is set, fetches live uncompleted tasks from Todoist.
+    Falls back to tasks.json if the Todoist call fails or token is absent.
+    task_ids is None when using the local tasks.json source.
+    """
+    if TODOIST_API_TOKEN:
+        try:
+            import todoist
+            items = todoist.fetch_todoist_tasks()
+            return [t["content"] for t in items], [t["id"] for t in items]
+        except Exception as e:
+            print(f"[warn] Todoist fetch failed, falling back to tasks.json: {e}")
+    return load_tasks(), None
+
+
 def send_morning_poll() -> None:
     """
     Morning poll: full task list → user selects which tasks they plan to do today.
+    Uses live Todoist Inbox tasks when TODOIST_API_TOKEN is configured.
     """
-    tasks = load_tasks()
+    task_names, task_ids = _load_poll_tasks()
     today = date.today().strftime("%A, %B %d")
     question = f"📅 {today} — Which tasks are you doing today?"
-    msg_id = _send_native_poll(question, tasks, allow_multiple=True)
-    mark_morning_poll_sent(msg_id)
-    print(f"[{date.today().isoformat()}] Morning poll sent (id: {msg_id})")
+    msg_id = _send_native_poll(question, task_names, allow_multiple=True)
+    mark_morning_poll_sent(msg_id, task_ids=task_ids)
+    source = "Todoist" if task_ids else "tasks.json"
+    print(f"[{date.today().isoformat()}] Morning poll sent (id: {msg_id}, source: {source})")
 
 
 def send_evening_poll() -> None:
