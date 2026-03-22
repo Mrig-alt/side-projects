@@ -121,23 +121,18 @@ def record_morning_vote(poll_id: str, selected_indices: list[int]) -> None:
     })
     _save(PROGRESS_FILE, progress)
 
-    # Create Google Calendar events for each planned task (visual day reminders)
-    cal_event_ids = {}
+    # Create timed Google Calendar events spread across free day slots
     try:
         import google_cal
-        for i in selected_indices:
-            if i < len(task_names):
-                try:
-                    event_id = google_cal.create_daily_task_event(task_names[i], day)
-                    cal_event_ids[task_names[i]] = event_id
-                except Exception:
-                    pass
-        if cal_event_ids:
-            progress = _load(PROGRESS_FILE)
-            progress.setdefault(day, {}).setdefault("morning", {})["cal_event_ids"] = cal_event_ids
-            _save(PROGRESS_FILE, progress)
+        planned_names = [task_names[i] for i in selected_indices if i < len(task_names)]
+        if planned_names:
+            cal_event_ids = google_cal.create_timed_task_events(planned_names, day)
+            if cal_event_ids:
+                progress = _load(PROGRESS_FILE)
+                progress.setdefault(day, {}).setdefault("morning", {})["cal_event_ids"] = cal_event_ids
+                _save(PROGRESS_FILE, progress)
     except Exception as e:
-        print(f"[warn] Google Calendar daily events failed: {e}")
+        print(f"[warn] Google Calendar timed events failed: {e}")
 
     # Step 2: log which tasks were planned
     try:

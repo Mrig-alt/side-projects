@@ -2,7 +2,7 @@ from datetime import date
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from config import TELEGRAM_CHAT_ID, TODOIST_API_TOKEN, PROGRESS_FILE, load_tasks, load_task_objects
-from tracker import mark_morning_poll_sent, mark_evening_poll_sent, get_planned_tasks_for_today, get_rollover_tasks, lookup_poll
+from tracker import mark_morning_poll_sent, mark_evening_poll_sent, get_planned_tasks_for_today, lookup_poll
 from state import ChecklistSession, sessions
 
 
@@ -43,20 +43,12 @@ def _load_poll_tasks() -> tuple[list[str], list[str], list[str] | None]:
 async def send_morning_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
     task_names, task_types, task_ids = _load_poll_tasks()
 
-    # Pre-select tasks that weren't completed yesterday (rollover)
-    rollover = set(get_rollover_tasks())
-    pre_selected = {i for i, name in enumerate(task_names) if name in rollover}
-
     today = date.today().strftime("%A, %B %d")
-    rollover_note = (
-        f"\n_(⏩ {len(pre_selected)} task(s) carried over from yesterday — pre-selected)_"
-        if pre_selected else ""
-    )
-    text = f"📅 *{today}* — Which tasks are you tackling today?{rollover_note}"
+    text = f"📅 *{today}* — Which tasks are you tackling today?"
     msg = await context.bot.send_message(
         chat_id=TELEGRAM_CHAT_ID,
         text=text,
-        reply_markup=build_keyboard(task_names, pre_selected),
+        reply_markup=build_keyboard(task_names, set()),
         parse_mode="Markdown",
     )
     key = str(msg.message_id)
@@ -65,7 +57,7 @@ async def send_morning_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
         poll_type="morning",
         message_id=key,
         display_tasks=task_names,
-        selected=pre_selected,
+        selected=set(),
     )
     source = "Todoist" if task_ids else "tasks.json"
     print(f"[{date.today().isoformat()}] Morning checklist sent (msg: {key}, source: {source})")

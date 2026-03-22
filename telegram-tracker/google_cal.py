@@ -10,10 +10,11 @@ catch and degrade gracefully so the bot works without calendar too.
 """
 
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-from config import TIMEZONE, GOOGLE_CREDENTIALS_PATH
+from config import TIMEZONE, GOOGLE_CREDENTIALS_PATH, MORNING_POLL_TIME, EVENING_POLL_TIME
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 TOKEN_PATH = Path(__file__).parent / "token.json"
@@ -40,6 +41,66 @@ def _get_service():
             )
 
     return build("calendar", "v3", credentials=creds)
+
+
+def _find_free_slots(
+    date_str: str,
+    count: int,
+    service,
+    tz_name: str,
+    start_hm: str,
+    end_hm: str,
+) -> list[datetime]:
+    """
+    Query freebusy and return `count` datetime starts for 30-min slots
+    that fit in the free gaps between start_hm and end_hm.
+    Falls back to evenly spaced times if not enough free gaps.
+    """
+    zone = ZoneInfo(tz_name)
+    d = date.fromisoformat(date_str)
+    sh, sm = map(int, start_hm.split(":"))
+    eh, em = map(int, end_hm.split(":"))
+
+    window_start = datetime(d.year, d.month, d.day, sh, sm, tzinfo=zone)
+    window_end   = datetime(d.year, d.month, d.day, eh, em, tzinfo=zone)
+    slot_len     = timedelta(minutes=30)
+
+    # Query busy times in the window
+    body = {
+        "timeMin": window_start.isoformat(),
+        "timeMax": window_end.isoformat(),
+        "timeZone": tz_name,
+        "items": [{"id": "primary"}],
+    }
+    result = service.freebusy().query(body=body).execute()
+    busy_raw = result.get("calendars", {}).get("primary", {}).get("busy", [])
+
+    busy = []
+    for b in busy_raw:
+        bs = datetime.fromisoformat(b["start"].replace("Z", "+00:00")).astimezone(zone)
+        be = datetime.fromisoformat(b["end"].replace("Z", "+00:00")).astimezone(zone)
+        busy.append((bs, be))
+
+    # Collect free 30-min increments across the window
+    free: list[datetime] = []
+    cursor = window_start
+    while cursor + slot_len <= window_end:
+        slot_end = cursor + slot_len
+        if not any(bs < slot_end and be > cursor for bs, be in busy):
+            free.append(cursor)
+        cursor += slot_len
+
+    if len(free) >= count:
+        # Pick evenly distributed slots from the free list
+        if count == 1:
+            return [free[len(free) // 2]]
+        step = (len(free) - 1) / (count - 1)
+        return [free[round(i * step)] for i in range(count)]
+
+    # Fallback: spread evenly across the full window regardless of busy times
+    total_secs = int((window_end - window_start).total_seconds())
+    step_secs = total_secs // (count + 1)
+    return [window_start + timedelta(seconds=step_secs * (i + 1)) for i in range(count)]
 
 
 # ── Public: date math (no auth needed) ───────────────────────────────────────
@@ -84,6 +145,37 @@ def countdown_label(days: int) -> str:
 
 # ── Public: Calendar API ──────────────────────────────────────────────────────
 
+def create_timed_task_events(names: list[str], date_str: str) -> dict[str, str]:
+    """
+    Creates timed 30-min calendar events spread across free slots in the day.
+    Queries freebusy first to avoid collisions with existing events.
+    Falls back to evenly-spaced times if the calendar is full.
+    Returns {task_name: event_id}.
+    """
+    service = _get_service()
+    zone = ZoneInfo(TIMEZONE)
+    slot_len = timedelta(minutes=30)
+
+    slots = _find_free_slots(date_str, len(names), service, TIMEZONE, MORNING_POLL_TIME, EVENING_POLL_TIME)
+
+    event_ids: dict[str, str] = {}
+    for name, slot_start in zip(names, slots):
+        slot_end = slot_start + slot_len
+        event = {
+            "summary": f"✅ {name}",
+            "start": {"dateTime": slot_start.isoformat(), "timeZone": TIMEZONE},
+            "end":   {"dateTime": slot_end.isoformat(),   "timeZone": TIMEZONE},
+            "reminders": {
+                "useDefault": False,
+                "overrides": [{"method": "popup", "minutes": 0}],
+            },
+        }
+        result = service.events().insert(calendarId="primary", body=event).execute()
+        event_ids[name] = result["id"]
+
+    return event_ids
+
+
 def create_deadline_event(name: str, due_date: str, due_time: str | None = None) -> str:
     """
     Creates a one-time calendar event.
@@ -119,24 +211,6 @@ def create_birthday_event(name: str, date_str: str) -> str:
         "start": {"date": date_str},
         "end": {"date": next_day},
         "recurrence": ["RRULE:FREQ=YEARLY"],
-    }
-    result = service.events().insert(calendarId="primary", body=event).execute()
-    return result["id"]
-
-
-def create_daily_task_event(name: str, task_date: str) -> str:
-    """
-    Creates an all-day calendar event for a task selected in the morning poll.
-    Used as a daily visual reminder — appears on the calendar for that day.
-    Returns the event ID string. Raises RuntimeError if calendar not configured.
-    """
-    service = _get_service()
-    next_day = (date.fromisoformat(task_date) + timedelta(days=1)).isoformat()
-    event = {
-        "summary": f"✅ {name}",
-        "start": {"date": task_date},
-        "end": {"date": next_day},
-        "reminders": {"useDefault": True},
     }
     result = service.events().insert(calendarId="primary", body=event).execute()
     return result["id"]

@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/telegram-tracker
-ExecStart=/opt/telegram-tracker/venv/bin/python run.py
+WorkingDirectory=/home/user/side-projects/telegram-tracker
+ExecStart=/usr/local/bin/python3 run.py
 Restart=on-failure
 RestartSec=10
 
