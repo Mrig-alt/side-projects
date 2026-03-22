@@ -1,7 +1,11 @@
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from config import PROGRESS_FILE, POLL_INDEX_FILE, load_tasks, load_task_objects, save_task_objects
+from config import (
+    PROGRESS_FILE, POLL_INDEX_FILE, TODOIST_CLOSE_ON_COMPLETE,
+    load_tasks, load_task_objects, save_task_objects,
+)
+import excel_store
 
 
 def _load(path: Path) -> dict:
@@ -14,12 +18,26 @@ def _save(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2))
 
 
-# ── Poll index: poll_id → {date, type} ───────────────────────────────────────
+# ── Poll index: poll_id → {date, type, task_ids?, task_names?, task_types?} ───
 
-def register_poll(poll_id: str, poll_type: str, day: str = None) -> None:
+def register_poll(
+    poll_id: str,
+    poll_type: str,
+    day: str = None,
+    task_ids: list[str] | None = None,
+    task_names: list[str] | None = None,
+    task_types: list[str] | None = None,
+) -> None:
     day = day or date.today().isoformat()
     index = _load(POLL_INDEX_FILE)
-    index[poll_id] = {"date": day, "type": poll_type}
+    entry: dict = {"date": day, "type": poll_type}
+    if task_ids is not None:
+        entry["task_ids"] = task_ids      # Todoist task IDs in poll-option order
+    if task_names is not None:
+        entry["task_names"] = task_names  # task display names in poll-option order
+    if task_types is not None:
+        entry["task_types"] = task_types  # task type strings in poll-option order
+    index[poll_id] = entry
     _save(POLL_INDEX_FILE, index)
 
 
@@ -29,17 +47,30 @@ def lookup_poll(poll_id: str) -> dict | None:
 
 # ── Progress ──────────────────────────────────────────────────────────────────
 
-def mark_morning_poll_sent(poll_id: str) -> None:
+def mark_morning_poll_sent(
+    poll_id: str,
+    task_names: list[str] | None = None,
+    task_types: list[str] | None = None,
+    task_ids: list[str] | None = None,
+) -> None:
     day = date.today().isoformat()
-    register_poll(poll_id, "morning", day)
+    register_poll(poll_id, "morning", day, task_ids=task_ids, task_names=task_names, task_types=task_types)
     progress = _load(PROGRESS_FILE)
     progress.setdefault(day, {})["morning"] = {
         "poll_id": poll_id,
         "sent_at": datetime.now().isoformat(),
         "planned_task_indices": None,
+        "planned_task_ids": None,
         "voted_at": None,
     }
     _save(PROGRESS_FILE, progress)
+
+    # Step 1: log that these tasks were shown
+    if task_names and task_types:
+        try:
+            excel_store.log_morning_poll_sent(day, task_names, task_types)
+        except Exception as e:
+            print(f"[warn] Excel log_morning_poll_sent failed: {e}")
 
 
 def mark_evening_poll_sent(poll_id: str, planned_indices: list[int] | None) -> None:
@@ -51,6 +82,7 @@ def mark_evening_poll_sent(poll_id: str, planned_indices: list[int] | None) -> N
         "sent_at": datetime.now().isoformat(),
         "planned_task_indices": planned_indices,
         "completed_task_indices": None,
+        "completed_task_ids": None,
         "completed_task_names": None,
         "percentage": None,
         "voted_at": None,
@@ -69,12 +101,31 @@ def record_morning_vote(poll_id: str, selected_indices: list[int]) -> None:
     info = lookup_poll(poll_id)
     if not info:
         return
+
+    day = info["date"]
+    task_ids = info.get("task_ids")
+    task_names = info.get("task_names") or load_tasks()
+    task_types = info.get("task_types") or [
+        t.get("type", "recurring") for t in load_task_objects()
+    ]
+
+    planned_task_ids = None
+    if task_ids:
+        planned_task_ids = [task_ids[i] for i in selected_indices if i < len(task_ids)]
+
     progress = _load(PROGRESS_FILE)
-    progress.setdefault(info["date"], {}).setdefault("morning", {}).update({
+    progress.setdefault(day, {}).setdefault("morning", {}).update({
         "planned_task_indices": selected_indices,
+        "planned_task_ids": planned_task_ids,
         "voted_at": datetime.now().isoformat(),
     })
     _save(PROGRESS_FILE, progress)
+
+    # Step 2: log which tasks were planned
+    try:
+        excel_store.write_morning_selections(day, task_names, task_types, selected_indices)
+    except Exception as e:
+        print(f"[warn] Excel write_morning_selections failed: {e}")
 
 
 def record_evening_vote(
@@ -87,6 +138,7 @@ def record_evening_vote(
 
     day = info["date"]
     tasks = load_tasks()
+    task_ids = info.get("task_ids")
     progress = _load(PROGRESS_FILE)
     evening = progress.get(day, {}).get("evening", {})
     planned = evening.get("planned_task_indices")
@@ -101,35 +153,56 @@ def record_evening_vote(
     pct = round(len(actual_indices) / denominator * 100) if denominator else 0
     completed_names = [tasks[i] for i in actual_indices if i < len(tasks)]
 
+    completed_task_ids = None
+    if task_ids:
+        completed_task_ids = [
+            task_ids[i] for i in selected_poll_indices if i < len(task_ids)
+        ]
+
     progress.setdefault(day, {}).setdefault("evening", {}).update({
         "completed_task_indices": actual_indices,
+        "completed_task_ids": completed_task_ids,
         "completed_task_names": completed_names,
         "percentage": pct,
         "voted_at": datetime.now().isoformat(),
         "status": "completed",
     })
     _save(PROGRESS_FILE, progress)
+
+    # Close completed tasks in Todoist if configured
+    if completed_task_ids and TODOIST_CLOSE_ON_COMPLETE:
+        try:
+            import todoist
+            for tid in completed_task_ids:
+                todoist.close_todoist_task(tid)
+        except Exception as e:
+            print(f"[warn] Todoist close failed: {e}")
+
     return pct, completed_names
 
 
 def update_task_stats(
     all_original_indices: list[int],
     completed_original_indices: list[int],
+    poll_id: str | None = None,
 ) -> list[str]:
     """
     Increment completed/missed counts for tasks that appeared in the evening checklist.
     Removes completed one-off tasks from tasks.json.
     Returns the names of any one-off tasks that were removed.
+    Also writes the updated stats to Excel.
     """
     tasks = load_task_objects()
     completed_set = set(completed_original_indices)
     removed_names = []
     kept = []
+    today = date.today().isoformat()
 
     for i, task in enumerate(tasks):
         if i in all_original_indices:
             if i in completed_set:
                 task["completed"] = task.get("completed", 0) + 1
+                task["last_active"] = today
                 if task.get("type") == "recurring":
                     task["current_streak"] = task.get("current_streak", 0) + 1
                     if task["current_streak"] > task.get("best_streak", 0):
@@ -143,6 +216,28 @@ def update_task_stats(
         kept.append(task)
 
     save_task_objects(kept)
+
+    # Step 3a: write evening completions to Excel Daily Log
+    day = today
+    task_names = [t["name"] for t in tasks]
+    task_types = [t.get("type", "recurring") for t in tasks]
+    pct = round(len(completed_original_indices) / len(all_original_indices) * 100) if all_original_indices else 0
+    streaks = {t["name"]: t.get("current_streak", 0) for t in kept}
+
+    try:
+        excel_store.write_evening_completions(
+            day, task_names, task_types,
+            completed_original_indices, pct, streaks,
+        )
+    except Exception as e:
+        print(f"[warn] Excel write_evening_completions failed: {e}")
+
+    # Step 3b: refresh Task Stats sheet
+    try:
+        excel_store.refresh_task_stats(kept)
+    except Exception as e:
+        print(f"[warn] Excel refresh_task_stats failed: {e}")
+
     return removed_names
 
 

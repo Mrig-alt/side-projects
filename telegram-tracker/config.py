@@ -16,9 +16,15 @@ TIMEZONE = os.getenv("TIMEZONE", "UTC")
 GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials.json")
 COUNTDOWN_THRESHOLD_DAYS = int(os.getenv("COUNTDOWN_THRESHOLD_DAYS", "10"))
 
+# Todoist (optional — bot works without this)
+TODOIST_API_TOKEN = os.getenv("TODOIST_API_TOKEN", "")
+TODOIST_PROJECT_NAME = os.getenv("TODOIST_PROJECT_NAME", "Inbox")
+TODOIST_CLOSE_ON_COMPLETE = os.getenv("TODOIST_CLOSE_ON_COMPLETE", "true").lower() == "true"
+
 TASKS_FILE = Path(__file__).parent / "tasks.json"
 PROGRESS_FILE = Path(__file__).parent / "progress.json"
 POLL_INDEX_FILE = Path(__file__).parent / "poll_index.json"
+EXCEL_FILE = Path(__file__).parent / "tracker.xlsx"
 
 
 def load_task_objects() -> list[dict]:

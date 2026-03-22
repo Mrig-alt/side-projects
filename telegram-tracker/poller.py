@@ -1,7 +1,7 @@
 from datetime import date
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from config import TELEGRAM_CHAT_ID, load_tasks
+from config import TELEGRAM_CHAT_ID, TODOIST_API_TOKEN, load_tasks, load_task_objects
 from tracker import mark_morning_poll_sent, mark_evening_poll_sent, get_planned_tasks_for_today
 from state import ChecklistSession, sessions
 
@@ -15,25 +15,51 @@ def build_keyboard(tasks: list[str], selected: set, confirm_label: str = "Done �
     return InlineKeyboardMarkup(buttons)
 
 
+def _load_poll_tasks() -> tuple[list[str], list[str], list[str] | None]:
+    """
+    Return (task_names, task_types, task_ids).
+
+    If TODOIST_API_TOKEN is set, fetches all uncompleted tasks from Todoist.
+    Falls back to tasks.json if the call fails or the token is absent.
+    task_ids is None when using the local tasks.json source.
+    """
+    if TODOIST_API_TOKEN:
+        try:
+            import todoist
+            items = todoist.fetch_todoist_tasks()
+            names = [t["content"] for t in items]
+            ids   = [t["id"]      for t in items]
+            types = ["todoist"] * len(items)
+            return names, types, ids
+        except Exception as e:
+            print(f"[warn] Todoist fetch failed, falling back to tasks.json: {e}")
+
+    task_objects = load_task_objects()
+    names = [t["name"]             for t in task_objects]
+    types = [t.get("type", "recurring") for t in task_objects]
+    return names, types, None
+
+
 async def send_morning_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
-    tasks = load_tasks()
+    task_names, task_types, task_ids = _load_poll_tasks()
     today = date.today().strftime("%A, %B %d")
     text = f"📅 *{today}* — Which tasks are you tackling today?"
     msg = await context.bot.send_message(
         chat_id=TELEGRAM_CHAT_ID,
         text=text,
-        reply_markup=build_keyboard(tasks, set()),
+        reply_markup=build_keyboard(task_names, set()),
         parse_mode="Markdown",
     )
     key = str(msg.message_id)
-    mark_morning_poll_sent(key)
+    mark_morning_poll_sent(key, task_names=task_names, task_types=task_types, task_ids=task_ids)
     sessions[TELEGRAM_CHAT_ID] = ChecklistSession(
         poll_type="morning",
         message_id=key,
-        display_tasks=tasks,
+        display_tasks=task_names,
         selected=set(),
     )
-    print(f"[{date.today().isoformat()}] Morning checklist sent (msg: {key})")
+    source = "Todoist" if task_ids else "tasks.json"
+    print(f"[{date.today().isoformat()}] Morning checklist sent (msg: {key}, source: {source})")
 
 
 async def send_evening_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
