@@ -76,6 +76,6 @@ for r in range(8, 51):
 # ── Freeze header row ─────────────────────────────────────────────────────────
 ws.freeze_panes = "A2"
 
-out = "/home/user/side-projects/whatsapp_task_tracker.xlsx"
+out = "/home/user/side-projects/telegram_task_tracker.xlsx"
 wb.save(out)
 print(f"Saved → {out}")
