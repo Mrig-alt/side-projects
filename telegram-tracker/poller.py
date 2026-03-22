@@ -1,8 +1,8 @@
 from datetime import date
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from config import TELEGRAM_CHAT_ID, TODOIST_API_TOKEN, load_tasks, load_task_objects
-from tracker import mark_morning_poll_sent, mark_evening_poll_sent, get_planned_tasks_for_today
+from config import TELEGRAM_CHAT_ID, TODOIST_API_TOKEN, PROGRESS_FILE, load_tasks, load_task_objects
+from tracker import mark_morning_poll_sent, mark_evening_poll_sent, get_planned_tasks_for_today, get_rollover_tasks, lookup_poll
 from state import ChecklistSession, sessions
 
 
@@ -42,12 +42,21 @@ def _load_poll_tasks() -> tuple[list[str], list[str], list[str] | None]:
 
 async def send_morning_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
     task_names, task_types, task_ids = _load_poll_tasks()
+
+    # Pre-select tasks that weren't completed yesterday (rollover)
+    rollover = set(get_rollover_tasks())
+    pre_selected = {i for i, name in enumerate(task_names) if name in rollover}
+
     today = date.today().strftime("%A, %B %d")
-    text = f"📅 *{today}* — Which tasks are you tackling today?"
+    rollover_note = (
+        f"\n_(⏩ {len(pre_selected)} task(s) carried over from yesterday — pre-selected)_"
+        if pre_selected else ""
+    )
+    text = f"📅 *{today}* — Which tasks are you tackling today?{rollover_note}"
     msg = await context.bot.send_message(
         chat_id=TELEGRAM_CHAT_ID,
         text=text,
-        reply_markup=build_keyboard(task_names, set()),
+        reply_markup=build_keyboard(task_names, pre_selected),
         parse_mode="Markdown",
     )
     key = str(msg.message_id)
@@ -56,25 +65,38 @@ async def send_morning_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
         poll_type="morning",
         message_id=key,
         display_tasks=task_names,
-        selected=set(),
+        selected=pre_selected,
     )
     source = "Todoist" if task_ids else "tasks.json"
     print(f"[{date.today().isoformat()}] Morning checklist sent (msg: {key}, source: {source})")
 
 
 async def send_evening_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
-    tasks = load_tasks()
+    import json
+
     planned_indices = get_planned_tasks_for_today()
 
+    # Use morning poll task names — correct for both Todoist and local tasks.json
+    today_str = date.today().isoformat()
+    progress = json.loads(PROGRESS_FILE.read_text()) if PROGRESS_FILE.exists() else {}
+    morning_poll_id = progress.get(today_str, {}).get("morning", {}).get("poll_id")
+    all_task_names = None
+    if morning_poll_id:
+        info = lookup_poll(morning_poll_id)
+        if info:
+            all_task_names = info.get("task_names")
+    if not all_task_names:
+        all_task_names = load_tasks()
+
     if planned_indices:
-        display_tasks = [tasks[i] for i in planned_indices if i < len(tasks)]
+        display_tasks = [all_task_names[i] for i in planned_indices if i < len(all_task_names)]
         intro = "Which of your planned tasks did you complete?"
     else:
-        display_tasks = tasks
+        display_tasks = all_task_names
         intro = "Which tasks did you complete today?"
 
     if not display_tasks:
-        display_tasks = tasks
+        display_tasks = all_task_names
         planned_indices = None
         intro = "Which tasks did you complete today?"
 

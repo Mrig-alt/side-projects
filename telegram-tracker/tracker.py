@@ -121,6 +121,24 @@ def record_morning_vote(poll_id: str, selected_indices: list[int]) -> None:
     })
     _save(PROGRESS_FILE, progress)
 
+    # Create Google Calendar events for each planned task (visual day reminders)
+    cal_event_ids = {}
+    try:
+        import google_cal
+        for i in selected_indices:
+            if i < len(task_names):
+                try:
+                    event_id = google_cal.create_daily_task_event(task_names[i], day)
+                    cal_event_ids[task_names[i]] = event_id
+                except Exception:
+                    pass
+        if cal_event_ids:
+            progress = _load(PROGRESS_FILE)
+            progress.setdefault(day, {}).setdefault("morning", {})["cal_event_ids"] = cal_event_ids
+            _save(PROGRESS_FILE, progress)
+    except Exception as e:
+        print(f"[warn] Google Calendar daily events failed: {e}")
+
     # Step 2: log which tasks were planned
     try:
         excel_store.write_morning_selections(day, task_names, task_types, selected_indices)
@@ -137,27 +155,39 @@ def record_evening_vote(
         return 0, []
 
     day = info["date"]
-    tasks = load_tasks()
-    task_ids = info.get("task_ids")
     progress = _load(PROGRESS_FILE)
     evening = progress.get(day, {}).get("evening", {})
     planned = evening.get("planned_task_indices")
+
+    # Use morning poll task names — works for both Todoist and local tasks.json
+    morning_poll_id = progress.get(day, {}).get("morning", {}).get("poll_id")
+    morning_info = lookup_poll(morning_poll_id) if morning_poll_id else None
+    task_names = (morning_info.get("task_names") if morning_info else None) or load_tasks()
+    morning_task_ids = morning_info.get("task_ids") if morning_info else None
 
     if planned is not None:
         actual_indices = [planned[i] for i in selected_poll_indices if i < len(planned)]
         denominator = len(planned)
     else:
         actual_indices = selected_poll_indices
-        denominator = len(tasks)
+        denominator = len(task_names)
 
     pct = round(len(actual_indices) / denominator * 100) if denominator else 0
-    completed_names = [tasks[i] for i in actual_indices if i < len(tasks)]
+    completed_names = [task_names[i] for i in actual_indices if i < len(task_names)]
 
+    # Resolve completed Todoist task IDs from morning poll
     completed_task_ids = None
-    if task_ids:
+    if morning_task_ids:
         completed_task_ids = [
-            task_ids[i] for i in selected_poll_indices if i < len(task_ids)
+            morning_task_ids[i] for i in actual_indices if i < len(morning_task_ids)
         ]
+
+    # Rollover: tasks that were planned this morning but not completed tonight
+    rollover_names: list[str] = []
+    if planned is not None:
+        planned_names = [task_names[i] for i in planned if i < len(task_names)]
+        completed_set = set(completed_names)
+        rollover_names = [n for n in planned_names if n not in completed_set]
 
     progress.setdefault(day, {}).setdefault("evening", {}).update({
         "completed_task_indices": actual_indices,
@@ -167,7 +197,18 @@ def record_evening_vote(
         "voted_at": datetime.now().isoformat(),
         "status": "completed",
     })
+    progress[day]["rollover"] = rollover_names
     _save(PROGRESS_FILE, progress)
+
+    # Delete today's calendar events for completed tasks
+    try:
+        import google_cal
+        cal_event_ids = progress.get(day, {}).get("morning", {}).get("cal_event_ids", {})
+        for name in completed_names:
+            if name in cal_event_ids:
+                google_cal.delete_event(cal_event_ids[name])
+    except Exception as e:
+        print(f"[warn] Google Calendar event deletion failed: {e}")
 
     # Close completed tasks in Todoist if configured
     if completed_task_ids and TODOIST_CLOSE_ON_COMPLETE:
@@ -239,6 +280,13 @@ def update_task_stats(
         print(f"[warn] Excel refresh_task_stats failed: {e}")
 
     return removed_names
+
+
+def get_rollover_tasks() -> list[str]:
+    """Return task names that were planned but not completed yesterday."""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    progress = _load(PROGRESS_FILE)
+    return progress.get(yesterday, {}).get("rollover", [])
 
 
 def get_weekly_summary() -> str:

@@ -124,6 +124,24 @@ def create_birthday_event(name: str, date_str: str) -> str:
     return result["id"]
 
 
+def create_daily_task_event(name: str, task_date: str) -> str:
+    """
+    Creates an all-day calendar event for a task selected in the morning poll.
+    Used as a daily visual reminder — appears on the calendar for that day.
+    Returns the event ID string. Raises RuntimeError if calendar not configured.
+    """
+    service = _get_service()
+    next_day = (date.fromisoformat(task_date) + timedelta(days=1)).isoformat()
+    event = {
+        "summary": f"✅ {name}",
+        "start": {"date": task_date},
+        "end": {"date": next_day},
+        "reminders": {"useDefault": True},
+    }
+    result = service.events().insert(calendarId="primary", body=event).execute()
+    return result["id"]
+
+
 def delete_event(event_id: str) -> None:
     """Silently deletes a calendar event; ignores errors."""
     try:
