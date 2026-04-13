@@ -1,0 +1,19 @@
+{
+  "name": "whatsapp-tool",
+  "version": "1.0.0",
+  "description": "WhatsApp HTTP API server — send messages from your personal number",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "pino": "^10.3.1"
+  }
+}
