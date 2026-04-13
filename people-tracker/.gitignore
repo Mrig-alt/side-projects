@@ -1,0 +1,14 @@
+# Browser sessions contain personal login cookies — never commit these
+~/.people-tracker/sessions/
+
+# Local data
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
