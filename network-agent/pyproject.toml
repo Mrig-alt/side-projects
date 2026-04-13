@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "network-agent"
+version = "0.1.0"
+description = "Local-first LinkedIn Action Tracker + People Dataset AI Agent"
+requires-python = ">=3.11"
+dependencies = [
+    "sqlmodel>=0.0.21",
+    "alembic>=1.13",
+    "typer[all]>=0.12",
+    "rich>=13",
+    "anthropic>=0.34",
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "rapidfuzz>=3.9",
+    "python-dateutil>=2.9",
+    "tabulate>=0.9",
+    "lxml>=5.0",
+]
+
+[project.optional-dependencies]
+playwright = ["playwright>=1.44"]
+dev = [
+    "pytest>=7",
+    "pytest-cov>=4",
+    "responses>=0.25",
+]
+
+[project.scripts]
+network_agent = "network_agent.cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["network_agent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

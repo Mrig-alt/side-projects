@@ -1,0 +1,59 @@
+# Rate limiting (per domain)
+rate_limiting:
+  requests_per_second: 1.0       # max 1 request/second per domain
+  retry_attempts: 3
+  retry_backoff_base: 2          # seconds (exponential)
+  connect_timeout: 10
+  read_timeout: 30
+
+# Scraper user-agent
+user_agent: "NetworkAgent/0.1 (local research tool; contact: yourname@example.com)"
+
+# Domain allowlist for scraping (empty = all domains allowed with caution prompt)
+allowed_domains: []
+# Example:
+# allowed_domains:
+#   - example.com
+#   - company-page.io
+
+# Scoring weights for suggest-next-actions ranking
+scoring_weights:
+  overdue_days: 0.4              # weight for how overdue the follow-up is
+  alignment: 0.3                 # weight for alignment score (1-5)
+  influence: 0.2                 # weight for influence score (1-5)
+  tie_strength: 0.1              # weight for tie_strength score (1-5)
+
+# Default values for new records
+defaults:
+  tie_strength: 3
+  alignment: 3
+  influence: 3
+  status: "Active"
+
+# Enums (these are stored as strings; editing here is for documentation only)
+action_types:
+  - profile_view
+  - search
+  - follow
+  - connect_request_sent
+  - connect_request_accepted
+  - message_sent
+  - message_received
+  - comment
+  - like
+  - post
+  - share
+  - group_join
+  - event_rsvp
+  - other
+
+classifications:
+  - Professional
+  - Educational
+  - Personal
+
+statuses:
+  - Active
+  - Dormant
+  - Needs Work
+  - Do Not Pursue
