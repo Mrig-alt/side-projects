@@ -1,0 +1,13 @@
+[Unit]
+Description=Telegram Progress Tracker Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/user/side-projects/telegram-tracker
+ExecStart=/usr/local/bin/python3 run.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

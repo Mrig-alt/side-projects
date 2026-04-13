@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+progress.json
+poll_index.json
+bot.log
