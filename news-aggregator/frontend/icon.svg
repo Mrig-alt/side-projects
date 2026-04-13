@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Dark background with rounded corners -->
+  <rect width="512" height="512" rx="80" fill="#0d0f14"/>
+  <!-- Lightning bolt: top-right to bottom-left -->
+  <polygon
+    points="310,60 195,270 262,270 195,450 325,240 255,240 310,60"
+    fill="#4f8ef7"/>
+</svg>
