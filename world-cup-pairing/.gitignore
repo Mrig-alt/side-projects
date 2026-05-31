@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Drizzle migrations output (keep schema, ignore generated SQL if desired)
+# drizzle/
+
+# Misc
+.DS_Store
+*.log
