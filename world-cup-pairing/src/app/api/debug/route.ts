@@ -1,34 +1,56 @@
 import { NextResponse } from "next/server";
-import postgres from "postgres";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const results: Record<string, unknown> = {};
 
-  results.DATABASE_URL_set = !!process.env.DATABASE_URL;
-  results.NEXTAUTH_SECRET_set = !!process.env.NEXTAUTH_SECRET;
-  results.AUTH_SECRET_set = !!process.env.AUTH_SECRET;
-  results.JOIN_PIN_set = !!process.env.JOIN_PIN;
-  results.NEXTAUTH_URL = process.env.NEXTAUTH_URL ?? "(not set)";
-
-  if (process.env.DATABASE_URL) {
-    try {
-      const sql = postgres(process.env.DATABASE_URL, {
-        prepare: false,
-        max: 1,
-        ssl: "require",
-        connect_timeout: 10,
-      });
-      const rows = await sql`SELECT COUNT(*) as count FROM teams`;
-      results.db_teams_count = rows[0]?.count;
-      results.db_connected = true;
-      await sql.end();
-    } catch (e) {
-      results.db_connected = false;
-      results.db_error = e instanceof Error ? e.message : String(e);
-    }
+  // Test 1: auth()
+  try {
+    const { auth } = await import("@/lib/auth");
+    const session = await auth();
+    results.auth_ok = true;
+    results.has_session = !!session;
+  } catch (e) {
+    results.auth_ok = false;
+    results.auth_error = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
   }
 
-  return NextResponse.json(results);
+  // Test 2: drizzle db + the homepage's matches query
+  try {
+    const { db } = await import("@/db");
+    const { matches, teams } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const rows = await db
+      .select({
+        id: matches.id,
+        team1: { id: teams.id, name: teams.name },
+      })
+      .from(matches)
+      .leftJoin(teams, eq(matches.team1Id, teams.id))
+      .limit(1);
+    results.drizzle_matches_ok = true;
+    results.matches_sample_count = rows.length;
+  } catch (e) {
+    results.drizzle_matches_ok = false;
+    results.drizzle_error = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
+  }
+
+  // Test 3: students query
+  try {
+    const { db } = await import("@/db");
+    const { students } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const rows = await db
+      .select({ id: students.id })
+      .from(students)
+      .where(eq(students.flagged, false));
+    results.drizzle_students_ok = true;
+    results.students_count = rows.length;
+  } catch (e) {
+    results.drizzle_students_ok = false;
+    results.students_error = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
+  }
+
+  return NextResponse.json(results, { status: 200 });
 }
