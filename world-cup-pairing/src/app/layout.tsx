@@ -7,6 +7,8 @@ import { SessionProvider } from "next-auth/react";
 
 const geist = Geist({ subsets: ["latin"] });
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "IE World Cup 2026",
   description: "Track your class pairings for World Cup 2026",

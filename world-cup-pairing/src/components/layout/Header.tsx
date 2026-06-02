@@ -1,9 +1,11 @@
+"use client";
+
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { useSession } from "next-auth/react";
 import { Trophy, Coins } from "lucide-react";
 
-export default async function Header() {
-  const session = await auth();
+export default function Header() {
+  const { data: session } = useSession();
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-sm">
