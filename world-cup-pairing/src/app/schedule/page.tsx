@@ -5,7 +5,7 @@ import { eq, and, asc } from "drizzle-orm";
 import MatchCard from "@/components/matches/MatchCard";
 import { stageLabel, formatMatchDate } from "@/lib/utils";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function SchedulePage() {
   const session = await auth();

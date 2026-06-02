@@ -6,7 +6,7 @@ import TodayHero from "@/components/matches/TodayHero";
 import MatchCard from "@/components/matches/MatchCard";
 import Link from "next/link";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const session = await auth();

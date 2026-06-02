@@ -4,7 +4,7 @@ import { students, teams } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import LeaderboardRow from "@/components/leaderboard/LeaderboardRow";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function LeaderboardPage() {
   const session = await auth();

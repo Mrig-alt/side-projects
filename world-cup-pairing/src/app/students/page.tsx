@@ -4,7 +4,7 @@ import { students, teams, connections } from "@/db/schema";
 import { eq, and, or } from "drizzle-orm";
 import StudentCard from "@/components/students/StudentCard";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function StudentsPage() {
   const session = await auth();

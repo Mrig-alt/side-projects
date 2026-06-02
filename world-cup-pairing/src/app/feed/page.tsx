@@ -3,7 +3,7 @@ import { teams, students } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import EliminationCard from "@/components/feed/EliminationCard";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
   const eliminatedTeams = await db
