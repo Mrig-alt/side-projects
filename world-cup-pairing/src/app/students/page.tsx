@@ -9,10 +9,11 @@ export const dynamic = "force-dynamic";
 export default async function StudentsPage() {
   try {
   const session = await auth();
+  const validSession = session?.user?.id ? session : null;
 
   // Get accepted friend IDs if logged in
   let friendIds = new Set<string>();
-  if (session) {
+  if (validSession) {
     const myConnections = await db
       .select({ requesterId: connections.requesterId, requesteeId: connections.requesteeId })
       .from(connections)
@@ -20,14 +21,14 @@ export default async function StudentsPage() {
         and(
           eq(connections.status, "accepted"),
           or(
-            eq(connections.requesterId, session.user.id),
-            eq(connections.requesteeId, session.user.id)
+            eq(connections.requesterId, validSession.user.id),
+            eq(connections.requesteeId, validSession.user.id)
           )
         )
       );
     for (const c of myConnections) {
-      if (c.requesterId !== session.user.id) friendIds.add(c.requesterId);
-      if (c.requesteeId !== session.user.id) friendIds.add(c.requesteeId);
+      if (c.requesterId !== validSession.user.id) friendIds.add(c.requesterId);
+      if (c.requesteeId !== validSession.user.id) friendIds.add(c.requesteeId);
     }
   }
 
@@ -53,8 +54,8 @@ export default async function StudentsPage() {
   // Filter by visibility
   const visible = allStudents.filter((s) => {
     if (s.visibility === "public") return true;
-    if (!session) return false;
-    if (s.id === session.user.id) return true;
+    if (!validSession) return false;
+    if (s.id === validSession.user.id) return true;
     if (s.visibility === "friends") return friendIds.has(s.id);
     return false; // stealth
   });
