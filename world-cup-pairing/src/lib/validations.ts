@@ -3,12 +3,11 @@ import { z } from "zod";
 export const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
   email: z.string().email("Invalid email address"),
-  // Accept empty string OR a proper nationality string (min 2 chars)
-  nationality: z
-    .string()
-    .max(100)
-    .optional()
-    .transform((v) => (v && v.trim().length >= 2 ? v.trim() : undefined)),
+  // Preprocess: treat empty/short strings as undefined before validation
+  nationality: z.preprocess(
+    (v) => (typeof v === "string" && v.trim().length < 2 ? undefined : v),
+    z.string().max(100).optional()
+  ),
   teamId: z.string().uuid("Invalid team").optional(),
   isHonoraryFan: z.boolean().optional(),
   visibility: z.enum(["public", "friends", "stealth"]).default("public"),
