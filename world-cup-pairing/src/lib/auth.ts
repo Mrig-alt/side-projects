@@ -8,6 +8,10 @@ import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  // Required for Render: server runs on localhost:10000 internally but
+  // receives requests forwarded from wc-syeo.onrender.com.
+  // trustHost tells NextAuth v5 to trust the Host header from the proxy.
+  trustHost: true,
   providers: [
     Credentials({
       name: "credentials",
