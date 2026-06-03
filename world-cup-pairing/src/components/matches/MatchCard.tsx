@@ -6,10 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import ShareButton from "./ShareButton";
 import WatchTogetherButton from "./WatchTogetherButton";
+import WatchTogetherCard from "./WatchTogetherCard";
 import PredictionForm from "./PredictionForm";
 import PresenceDot from "@/components/students/PresenceDot";
 import Link from "next/link";
-import { MapPin } from "lucide-react";
+import { useState } from "react";
+import { MapPin, ChevronDown, ChevronUp } from "lucide-react";
 
 interface Supporter {
   id: string;
@@ -57,6 +59,7 @@ export default function MatchCard({
   const isCompleted = match.status === "completed";
   const isUpcoming = match.status === "upcoming";
   const isFriendly = match.stage === "friendly";
+  const [showWatchCard, setShowWatchCard] = useState(false);
 
   const myTeamSide =
     currentUserTeamId === match.team1?.id
@@ -67,13 +70,13 @@ export default function MatchCard({
 
   const myTeam = myTeamSide === "team1" ? match.team1 : myTeamSide === "team2" ? match.team2 : null;
   const predictionStr = prediction
-    ? `${prediction.predictedScore1}–${prediction.predictedScore2}`
+    ? `${prediction.predictedScore1}\u2013${prediction.predictedScore2}`
     : undefined;
 
   const t1Name = match.team1?.name ?? match.team1Placeholder ?? "TBD";
   const t2Name = match.team2?.name ?? match.team2Placeholder ?? "TBD";
-  const t1Flag = match.team1?.flagEmoji ?? "🏳️";
-  const t2Flag = match.team2?.flagEmoji ?? "🏳️";
+  const t1Flag = match.team1?.flagEmoji ?? "\uD83C\uDFF3\uFE0F";
+  const t2Flag = match.team2?.flagEmoji ?? "\uD83C\uDFF3\uFE0F";
 
   return (
     <Card className={isLive ? "ring-2 ring-red-400" : ""}>
@@ -83,7 +86,7 @@ export default function MatchCard({
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-400">
               {isFriendly ? "Friendly" : stageLabel(match.stage)}
-              {match.groupName && ` · Group ${match.groupName}`}
+              {match.groupName && ` \u00b7 Group ${match.groupName}`}
             </span>
             {isLive && <Badge variant="live">LIVE</Badge>}
             {isFriendly && <Badge variant="friendly">Practice</Badge>}
@@ -99,7 +102,7 @@ export default function MatchCard({
             <div className="flex flex-col items-center shrink-0 min-w-[56px]">
               {isCompleted || isLive ? (
                 <span className="text-xl font-bold text-gray-900">
-                  {match.team1Score ?? 0}–{match.team2Score ?? 0}
+                  {match.team1Score ?? 0}\u2013{match.team2Score ?? 0}
                 </span>
               ) : (
                 <span className="text-sm font-medium text-gray-400">vs</span>
@@ -127,6 +130,25 @@ export default function MatchCard({
                 opponentWatchInvite.locationName
               )}
             </span>
+          </div>
+        )}
+
+        {/* Watch together full card — toggled for all matches */}
+        {isUpcoming && (
+          <div className="mt-3">
+            <button
+              onClick={() => setShowWatchCard((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-green-600 transition-colors"
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              Who&apos;s watching where
+              {showWatchCard ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+            {showWatchCard && (
+              <div className="mt-2">
+                <WatchTogetherCard matchId={match.id} />
+              </div>
+            )}
           </div>
         )}
 

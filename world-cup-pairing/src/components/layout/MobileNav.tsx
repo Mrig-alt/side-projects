@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Calendar, Users, Trophy, Rss } from "lucide-react";
+import { Home, Calendar, Trophy, Rss, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", icon: Home, label: "Home" },
   { href: "/schedule", icon: Calendar, label: "Schedule" },
-  { href: "/students", icon: Users, label: "Class" },
+  { href: "/friends", icon: UsersRound, label: "Friends" },
   { href: "/leaderboard", icon: Trophy, label: "Tokens" },
   { href: "/feed", icon: Rss, label: "Feed" },
 ];
@@ -20,7 +20,7 @@ export default function MobileNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-100 bg-white/90 backdrop-blur-sm md:hidden">
       <div className="flex items-center justify-around py-2">
         {navItems.map(({ href, icon: Icon, label }) => {
-          const active = pathname === href;
+          const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}
