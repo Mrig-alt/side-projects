@@ -4,12 +4,18 @@ import * as schema from "./schema";
 
 const connectionString = process.env.DATABASE_URL!;
 
+// Render internal Postgres uses self-signed certs — rejectUnauthorized:false handles this.
+// For local dev (localhost), SSL is disabled entirely.
+const isLocalhost =
+  connectionString.includes("localhost") ||
+  connectionString.includes("127.0.0.1");
+
+const sslMode = isLocalhost ? false : { rejectUnauthorized: false };
+
 const client = postgres(connectionString, {
   prepare: false,
-  max: 1,
-  // Use SSL in production (Render) but not locally
-  ssl: process.env.NODE_ENV === "production" ? "require" : false,
-  // Explicit connect timeout to fail fast rather than hang
+  max: 3,
+  ssl: sslMode,
   connect_timeout: 10,
   idle_timeout: 20,
 });
