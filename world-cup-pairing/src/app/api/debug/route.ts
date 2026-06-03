@@ -3,133 +3,95 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const results: Record<string, unknown> = {};
+  const out: Record<string, unknown> = {
+    node_env: process.env.NODE_ENV,
+    database_url_set: !!process.env.DATABASE_URL,
+    database_url_prefix: process.env.DATABASE_URL?.slice(0, 30) + "...",
+    nextauth_secret_set: !!process.env.NEXTAUTH_SECRET,
+    auth_secret_set: !!process.env.AUTH_SECRET,
+    join_pin_set: !!process.env.JOIN_PIN,
+    nextauth_url: process.env.NEXTAUTH_URL,
+  };
 
+  // Test 1: Can we import @/db at all?
   try {
-    // Step 1: DB connection
     const { db } = await import("@/db");
-    const { matches, teams, students, predictions, watchInvites } = await import("@/db/schema");
-    const { eq, and, gte, lte, asc } = await import("drizzle-orm");
+    out.db_import_ok = true;
 
-    const [{ count: teamCount }] = await db.execute<{ count: string }>(
-      db.select({ count: teams.id }).from(teams).limit(1) as never
-    ).catch(async () => {
+    // Test 2: Can we run a simple query?
+    try {
+      const { teams } = await import("@/db/schema");
       const rows = await db.select({ id: teams.id }).from(teams).limit(1);
-      return [{ count: String(rows.length) }];
-    });
-    results.db_ok = true;
-
-    // Step 2: auth
-    try {
-      const { auth } = await import("@/lib/auth");
-      const session = await auth();
-      results.auth_ok = true;
-      results.has_session = !!session;
+      out.db_query_ok = true;
+      out.db_has_rows = rows.length > 0;
     } catch (e) {
-      results.auth_ok = false;
-      results.auth_error = e instanceof Error ? e.message : String(e);
+      out.db_query_ok = false;
+      out.db_query_error = e instanceof Error ? e.message : String(e);
     }
-
-    // Step 3: todayMatches query (the problematic double-join one from page.tsx)
-    try {
-      const now = new Date();
-      const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
-
-      const todayMatches = await db
-        .select({
-          id: matches.id,
-          matchDatetime: matches.matchDatetime,
-          status: matches.status,
-          stage: matches.stage,
-          groupName: matches.groupName,
-          team1Score: matches.team1Score,
-          team2Score: matches.team2Score,
-          venue: matches.venue,
-          city: matches.city,
-          team1Placeholder: matches.team1Placeholder,
-          team2Placeholder: matches.team2Placeholder,
-          team1: { id: teams.id, name: teams.name, flagEmoji: teams.flagEmoji },
-          team2: { id: teams.id, name: teams.name, flagEmoji: teams.flagEmoji },
-        })
-        .from(matches)
-        .leftJoin(teams, eq(matches.team1Id, teams.id))
-        .where(and(gte(matches.matchDatetime, todayStart), lte(matches.matchDatetime, todayEnd)))
-        .orderBy(matches.matchDatetime);
-
-      results.todayMatches_ok = true;
-      results.todayMatches_count = todayMatches.length;
-      if (todayMatches[0]) {
-        results.todayMatches_sample = {
-          id: todayMatches[0].id,
-          status: todayMatches[0].status,
-          team1: todayMatches[0].team1,
-          team2: todayMatches[0].team2,
-        };
-      }
-    } catch (e) {
-      results.todayMatches_ok = false;
-      results.todayMatches_error = e instanceof Error ? e.message : String(e);
-    }
-
-    // Step 4: allStudents query
-    try {
-      const allStudents = await db
-        .select({ id: students.id, name: students.name, teamId: students.teamId, visibility: students.visibility, lastSeenAt: students.lastSeenAt })
-        .from(students)
-        .where(eq(students.flagged, false));
-      results.allStudents_ok = true;
-      results.allStudents_count = allStudents.length;
-    } catch (e) {
-      results.allStudents_ok = false;
-      results.allStudents_error = e instanceof Error ? e.message : String(e);
-    }
-
-    // Step 5: predictions query (needs a fake student id)
-    try {
-      const myPredictions = await db
-        .select()
-        .from(predictions)
-        .where(and(eq(predictions.studentId, "00000000-0000-0000-0000-000000000000")));
-      results.predictions_ok = true;
-      results.predictions_count = myPredictions.length;
-    } catch (e) {
-      results.predictions_ok = false;
-      results.predictions_error = e instanceof Error ? e.message : String(e);
-    }
-
-    // Step 6: watch invites query
-    try {
-      const invites = await db.select({
-        inviterId: watchInvites.inviterId,
-        matchId: watchInvites.matchId,
-        locationName: watchInvites.locationName,
-        locationUrl: watchInvites.locationUrl,
-      }).from(watchInvites);
-      results.watchInvites_ok = true;
-      results.watchInvites_count = invites.length;
-    } catch (e) {
-      results.watchInvites_ok = false;
-      results.watchInvites_error = e instanceof Error ? e.message : String(e);
-    }
-
-    // Step 7: Try the complete schedule query pattern (simpler, works for both pages)
-    try {
-      const allMatches = await db
-        .select({ id: matches.id, matchDatetime: matches.matchDatetime, status: matches.status, team1Id: matches.team1Id, team2Id: matches.team2Id })
-        .from(matches)
-        .orderBy(asc(matches.matchDatetime))
-        .limit(3);
-      results.schedule_query_ok = true;
-      results.schedule_count = allMatches.length;
-    } catch (e) {
-      results.schedule_query_ok = false;
-      results.schedule_error = e instanceof Error ? e.message : String(e);
-    }
-
   } catch (e) {
-    results.setup_error = e instanceof Error ? `${e.name}: ${e.message}\n${e.stack?.slice(0, 500)}` : String(e);
+    out.db_import_ok = false;
+    out.db_import_error = e instanceof Error ? e.message : String(e);
   }
 
-  return NextResponse.json(results);
+  // Test 3: Can we import and call auth()?
+  try {
+    const { auth } = await import("@/lib/auth");
+    out.auth_import_ok = true;
+    try {
+      const session = await auth();
+      out.auth_call_ok = true;
+      out.has_session = !!session;
+    } catch (e) {
+      out.auth_call_ok = false;
+      out.auth_call_error = e instanceof Error ? e.message : String(e);
+    }
+  } catch (e) {
+    out.auth_import_ok = false;
+    out.auth_import_error = e instanceof Error ? e.message : String(e);
+  }
+
+  // Test 4: Run the exact leaderboard query (simpler than home page)
+  try {
+    const { db } = await import("@/db");
+    const { students, teams } = await import("@/db/schema");
+    const { eq, desc } = await import("drizzle-orm");
+
+    const rows = await db
+      .select({ id: students.id, name: students.name, tokenBalance: students.tokenBalance })
+      .from(students)
+      .where(eq(students.flagged, false))
+      .orderBy(desc(students.tokenBalance))
+      .limit(3);
+
+    out.leaderboard_query_ok = true;
+    out.leaderboard_count = rows.length;
+  } catch (e) {
+    out.leaderboard_query_ok = false;
+    out.leaderboard_query_error = e instanceof Error ? e.message : String(e);
+  }
+
+  // Test 5: Today's matches query (from home page)
+  try {
+    const { db } = await import("@/db");
+    const { matches } = await import("@/db/schema");
+    const { and, gte, lte, asc } = await import("drizzle-orm");
+
+    const now = new Date();
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
+
+    const rows = await db
+      .select({ id: matches.id, status: matches.status, matchDatetime: matches.matchDatetime })
+      .from(matches)
+      .where(and(gte(matches.matchDatetime, todayStart), lte(matches.matchDatetime, todayEnd)))
+      .orderBy(asc(matches.matchDatetime));
+
+    out.today_matches_ok = true;
+    out.today_matches_count = rows.length;
+  } catch (e) {
+    out.today_matches_ok = false;
+    out.today_matches_error = e instanceof Error ? e.message : String(e);
+  }
+
+  return NextResponse.json(out, { status: 200 });
 }
