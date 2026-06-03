@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { matches, teams, students, predictions, watchInvites, bets } from "@/db/schema";
-import { eq, and, gte, lte, or, desc } from "drizzle-orm";
+import { matches, teams, students, predictions, watchInvites } from "@/db/schema";
+import { eq, and, gte, lte, asc } from "drizzle-orm";
 import TodayHero from "@/components/matches/TodayHero";
 import MatchCard from "@/components/matches/MatchCard";
 
@@ -16,7 +16,7 @@ export default async function HomePage() {
   const todayEnd = new Date(now);
   todayEnd.setHours(23, 59, 59, 999);
 
-  // Today's matches
+  // Today's matches (without team join — we fetch teams separately)
   const todayMatches = await db
     .select({
       id: matches.id,
@@ -30,19 +30,18 @@ export default async function HomePage() {
       city: matches.city,
       team1Placeholder: matches.team1Placeholder,
       team2Placeholder: matches.team2Placeholder,
-      team1: { id: teams.id, name: teams.name, flagEmoji: teams.flagEmoji },
-      team2: { id: teams.id, name: teams.name, flagEmoji: teams.flagEmoji },
+      team1Id: matches.team1Id,
+      team2Id: matches.team2Id,
     })
     .from(matches)
-    .leftJoin(teams, eq(matches.team1Id, teams.id))
     .where(and(gte(matches.matchDatetime, todayStart), lte(matches.matchDatetime, todayEnd)))
-    .orderBy(matches.matchDatetime);
+    .orderBy(asc(matches.matchDatetime));
 
-  // This is a simplified fetch — for home page we need team1 + team2 separately
-  // Use a raw approach with two joins
-  const todayMatchIds = todayMatches.map((m) => m.id);
+  // All teams — build a lookup map
+  const allTeams = await db.select().from(teams);
+  const teamMap = new Map(allTeams.map((t) => [t.id, t]));
 
-  // Get all students with their teams (for pairings)
+  // All non-flagged students (for pairings)
   const allStudents = await db
     .select({
       id: students.id,
@@ -54,47 +53,46 @@ export default async function HomePage() {
     .from(students)
     .where(eq(students.flagged, false));
 
-  // Get current user's predictions for today
+  // Current user's predictions
   const myPredictions = session
     ? await db
         .select()
         .from(predictions)
-        .where(
-          and(
-            eq(predictions.studentId, session.user.id),
-          )
-        )
+        .where(eq(predictions.studentId, session.user.id))
     : [];
 
-  // Get watch invites for today's matches
-  const todayInvites = todayMatchIds.length > 0
-    ? await db
-        .select({
-          inviterId: watchInvites.inviterId,
-          matchId: watchInvites.matchId,
-          locationName: watchInvites.locationName,
-          locationUrl: watchInvites.locationUrl,
-        })
-        .from(watchInvites)
-    : [];
+  // Watch invites for today's matches
+  const todayMatchIds = todayMatches.map((m) => m.id);
+  const todayInvites =
+    todayMatchIds.length > 0
+      ? await db
+          .select({
+            inviterId: watchInvites.inviterId,
+            matchId: watchInvites.matchId,
+            locationName: watchInvites.locationName,
+            locationUrl: watchInvites.locationUrl,
+          })
+          .from(watchInvites)
+      : [];
 
   const liveCount = todayMatches.filter((m) => m.status === "live").length;
   const upcomingCount = todayMatches.filter((m) => m.status === "upcoming").length;
-  const nextMatch = todayMatches.find((m) => m.status === "upcoming") ?? null;
 
-  const myTeam = session?.user.teamId
-    ? allStudents.find((s) => s.id === session.user.id)
+  const nextMatchRaw = todayMatches.find((m) => m.status === "upcoming") ?? null;
+  const nextMatch = nextMatchRaw
+    ? {
+        matchDatetime: nextMatchRaw.matchDatetime,
+        team1: nextMatchRaw.team1Id ? (teamMap.get(nextMatchRaw.team1Id) ?? null) : null,
+        team2: nextMatchRaw.team2Id ? (teamMap.get(nextMatchRaw.team2Id) ?? null) : null,
+      }
     : null;
-
-  // Build team lookup
-  const teamMap = new Map<string, { id: string; name: string; flagEmoji: string }>();
 
   return (
     <div className="space-y-6">
       <TodayHero
         liveCount={liveCount}
         upcomingCount={upcomingCount}
-        nextMatch={nextMatch as Parameters<typeof TodayHero>[0]["nextMatch"]}
+        nextMatch={nextMatch}
         tokenBalance={session?.user.tokenBalance}
       />
 
@@ -103,7 +101,10 @@ export default async function HomePage() {
           <p className="text-sm text-green-700 font-medium">
             🏆 Join the class to see your pairings and bet tokens!
           </p>
-          <a href="/join" className="mt-2 inline-block rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+          <a
+            href="/join"
+            className="mt-2 inline-block rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          >
             Join now
           </a>
         </div>
@@ -114,31 +115,36 @@ export default async function HomePage() {
           {liveCount > 0 ? "🔴 Live now" : "Today's matches"}
         </h2>
         {todayMatches.length === 0 ? (
-          <p className="text-sm text-gray-400 py-8 text-center">No matches today — check the schedule for upcoming games.</p>
+          <p className="text-sm text-gray-400 py-8 text-center">
+            No matches today — check the schedule for upcoming games.
+          </p>
         ) : (
           <div className="space-y-3">
             {todayMatches.map((match) => {
+              const t1 = match.team1Id ? teamMap.get(match.team1Id) ?? null : null;
+              const t2 = match.team2Id ? teamMap.get(match.team2Id) ?? null : null;
+
               const team1Supporters = allStudents.filter(
-                (s) => s.teamId === match.team1?.id && s.visibility !== "stealth"
+                (s) => s.teamId === match.team1Id && s.visibility !== "stealth"
               );
               const team2Supporters = allStudents.filter(
-                (s) => s.teamId === match.team2?.id && s.visibility !== "stealth"
+                (s) => s.teamId === match.team2Id && s.visibility !== "stealth"
               );
+
               const myPred = myPredictions.find((p) => p.matchId === match.id);
               const myInvite = todayInvites.find(
                 (i) => i.matchId === match.id && i.inviterId === session?.user.id
               );
 
-              // Find opponent's watch invite (someone on the other side)
               const myTeamId = session?.user.teamId;
-              const isOnTeam1 = myTeamId === match.team1?.id;
-              const isOnTeam2 = myTeamId === match.team2?.id;
-              const opponentTeamSupporters = isOnTeam1
+              const isOnTeam1 = myTeamId === match.team1Id;
+              const isOnTeam2 = myTeamId === match.team2Id;
+              const opponentSupporters = isOnTeam1
                 ? team2Supporters
                 : isOnTeam2
                 ? team1Supporters
                 : [];
-              const opponentIds = opponentTeamSupporters.map((s) => s.id);
+              const opponentIds = opponentSupporters.map((s) => s.id);
               const opponentInviteRaw = todayInvites.find(
                 (i) => i.matchId === match.id && opponentIds.includes(i.inviterId)
               );
@@ -146,16 +152,41 @@ export default async function HomePage() {
                 ? allStudents.find((s) => s.id === opponentInviteRaw.inviterId)
                 : null;
 
+              const fullMatch = {
+                ...match,
+                team1: t1 ? { id: t1.id, name: t1.name, flagEmoji: t1.flagEmoji } : null,
+                team2: t2 ? { id: t2.id, name: t2.name, flagEmoji: t2.flagEmoji } : null,
+              };
+
               return (
                 <MatchCard
                   key={match.id}
-                  match={match as Parameters<typeof MatchCard>[0]["match"]}
-                  team1Supporters={team1Supporters.map((s) => ({ id: s.id, name: s.name, lastSeenAt: s.lastSeenAt, watchInvite: null }))}
-                  team2Supporters={team2Supporters.map((s) => ({ id: s.id, name: s.name, lastSeenAt: s.lastSeenAt, watchInvite: null }))}
+                  match={fullMatch as Parameters<typeof MatchCard>[0]["match"]}
+                  team1Supporters={team1Supporters.map((s) => ({
+                    id: s.id,
+                    name: s.name,
+                    lastSeenAt: s.lastSeenAt,
+                  }))}
+                  team2Supporters={team2Supporters.map((s) => ({
+                    id: s.id,
+                    name: s.name,
+                    lastSeenAt: s.lastSeenAt,
+                  }))}
                   currentUserId={session?.user.id}
                   currentUserTeamId={session?.user.teamId}
-                  prediction={myPred ? { predictedScore1: myPred.predictedScore1, predictedScore2: myPred.predictedScore2 } : null}
-                  myWatchInvite={myInvite ? { locationName: myInvite.locationName ?? "", locationUrl: myInvite.locationUrl } : null}
+                  prediction={
+                    myPred
+                      ? {
+                          predictedScore1: myPred.predictedScore1,
+                          predictedScore2: myPred.predictedScore2,
+                        }
+                      : null
+                  }
+                  myWatchInvite={
+                    myInvite
+                      ? { locationName: myInvite.locationName ?? "", locationUrl: myInvite.locationUrl }
+                      : null
+                  }
                   opponentWatchInvite={
                     opponentInviteRaw && opponentInviter
                       ? {
