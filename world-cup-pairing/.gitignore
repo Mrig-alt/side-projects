@@ -1,18 +1,36 @@
-# Dependencies
+# dependencies
 node_modules/
+.pnp
+.pnp.js
 
-# Next.js
+# testing
+coverage/
+
+# next.js
 .next/
 out/
 
-# Environment
-.env
-.env.local
-.env.production
+# production
+build/
 
-# Drizzle migrations output (keep schema, ignore generated SQL if desired)
-# drizzle/
-
-# Misc
+# misc
 .DS_Store
-*.log
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env
+.env*.local
+
+# vercel
+.vercel
+
+# typescript build cache
+tsconfig.tsbuildinfo
+
+# pnpm
+.pnpm-store/
