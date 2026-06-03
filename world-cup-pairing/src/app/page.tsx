@@ -4,7 +4,6 @@ import { matches, teams, students, predictions, watchInvites, bets } from "@/db/
 import { eq, and, gte, lte, or, desc } from "drizzle-orm";
 import TodayHero from "@/components/matches/TodayHero";
 import MatchCard from "@/components/matches/MatchCard";
-import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -104,9 +103,9 @@ export default async function HomePage() {
           <p className="text-sm text-green-700 font-medium">
             🏆 Join the class to see your pairings and bet tokens!
           </p>
-          <Link href="/join" className="mt-2 inline-block rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+          <a href="/join" className="mt-2 inline-block rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
             Join now
-          </Link>
+          </a>
         </div>
       )}
 
@@ -174,9 +173,9 @@ export default async function HomePage() {
       </section>
 
       <div className="flex justify-center">
-        <Link href="/schedule" className="text-sm font-medium text-green-600 hover:text-green-700">
+        <a href="/schedule" className="text-sm font-medium text-green-600 hover:text-green-700">
           View full schedule →
-        </Link>
+        </a>
       </div>
     </div>
   );

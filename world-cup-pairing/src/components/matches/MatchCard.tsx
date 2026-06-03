@@ -1,3 +1,5 @@
+"use client";
+
 import { formatKickoff, stageLabel } from "@/lib/utils";
 import type { MatchStage } from "@/db/schema";
 import { Badge } from "@/components/ui/badge";

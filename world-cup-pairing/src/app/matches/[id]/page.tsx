@@ -6,7 +6,6 @@ import { notFound } from "next/navigation";
 import { formatMatchDate, formatKickoff, stageLabel } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import ReactionTimeline from "@/components/matches/ReactionTimeline";
-import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +78,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">← Back</Link>
+      <a href="/" className="text-sm text-gray-500 hover:text-gray-700">← Back</a>
 
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
@@ -143,7 +142,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
           />
         ) : (
           <div className="rounded-xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-400">
-            <Link href="/join" className="text-green-600 font-medium hover:underline">Join the class</Link> to drop reactions
+            <a href="/join" className="text-green-600 font-medium hover:underline">Join the class</a> to drop reactions
           </div>
         )}
       </section>
