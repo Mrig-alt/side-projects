@@ -23,6 +23,18 @@ interface Team {
   takenBy?: string | null;
 }
 
+function formatError(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && error !== null) {
+    // Zod field errors come back as { field: ["message"] }
+    const msgs = Object.entries(error)
+      .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs[0] : msgs}`)
+      .join(", ");
+    return msgs || "Registration failed — please check your details";
+  }
+  return "Registration failed";
+}
+
 export default function JoinPage() {
   const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
@@ -57,11 +69,19 @@ export default function JoinPage() {
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, nationality, pin, teamId, visibility }),
+        body: JSON.stringify({
+          name,
+          email,
+          nationality: nationality.trim() || undefined,
+          pin,
+          teamId,
+          isHonoraryFan,
+          visibility,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(typeof data.error === "string" ? data.error : "Registration failed");
+        setError(formatError(data.error));
         return;
       }
       // Sign in after registration
@@ -73,8 +93,10 @@ export default function JoinPage() {
       if (result?.ok) {
         router.push("/");
       } else {
-        setError("Registered but login failed — please try signing in");
+        setError("Registered! But auto-login failed — please go to /join and sign in manually.");
       }
+    } catch (e) {
+      setError("Network error — please try again");
     } finally {
       setLoading(false);
     }
