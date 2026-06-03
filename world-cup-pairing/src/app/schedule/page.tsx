@@ -8,6 +8,7 @@ import { stageLabel, formatMatchDate } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function SchedulePage() {
+  try {
   const session = await auth();
 
   const allMatches = await db
@@ -117,4 +118,16 @@ export default async function SchedulePage() {
       ))}
     </div>
   );
+  } catch (e) {
+    return (
+      <div style={{ padding: 24, background: "#fef2f2", borderRadius: 8, margin: 16 }}>
+        <h2 style={{ fontWeight: 700, color: "#991b1b", marginBottom: 8 }}>
+          Schedule render error (debug):
+        </h2>
+        <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", color: "#7f1d1d" }}>
+          {e instanceof Error ? `${e.message}\n\n${e.stack}` : String(e)}
+        </pre>
+      </div>
+    );
+  }
 }

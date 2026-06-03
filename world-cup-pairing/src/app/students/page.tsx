@@ -7,6 +7,7 @@ import StudentCard from "@/components/students/StudentCard";
 export const dynamic = "force-dynamic";
 
 export default async function StudentsPage() {
+  try {
   const session = await auth();
 
   // Get accepted friend IDs if logged in
@@ -96,4 +97,16 @@ export default async function StudentsPage() {
       )}
     </div>
   );
+  } catch (e) {
+    return (
+      <div style={{ padding: 24, background: "#fef2f2", borderRadius: 8, margin: 16 }}>
+        <h2 style={{ fontWeight: 700, color: "#991b1b", marginBottom: 8 }}>
+          Students render error (debug):
+        </h2>
+        <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", color: "#7f1d1d" }}>
+          {e instanceof Error ? `${e.message}\n\n${e.stack}` : String(e)}
+        </pre>
+      </div>
+    );
+  }
 }
