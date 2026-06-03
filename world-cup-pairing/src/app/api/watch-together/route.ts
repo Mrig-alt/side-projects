@@ -1,9 +1,38 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { watchInvites } from "@/db/schema";
+import { watchInvites, students } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { watchTogetherSchema } from "@/lib/validations";
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const matchId = searchParams.get("matchId");
+  if (!matchId) return NextResponse.json({ error: "matchId required" }, { status: 400 });
+
+  const invites = await db
+    .select({
+      id: watchInvites.id,
+      locationName: watchInvites.locationName,
+      locationUrl: watchInvites.locationUrl,
+      inviterName: students.name,
+      inviterId: watchInvites.inviterId,
+      createdAt: watchInvites.createdAt,
+    })
+    .from(watchInvites)
+    .innerJoin(students, eq(students.id, watchInvites.inviterId))
+    .where(eq(watchInvites.matchId, matchId));
+
+  // Group by location so multiple people at the same spot merge
+  const locations: Record<string, { locationName: string; locationUrl: string | null; people: string[] }> = {};
+  for (const inv of invites) {
+    const key = inv.locationName ?? "Unknown";
+    if (!locations[key]) locations[key] = { locationName: key, locationUrl: inv.locationUrl ?? null, people: [] };
+    locations[key].people.push(inv.inviterName);
+  }
+
+  return NextResponse.json({ locations: Object.values(locations) });
+}
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -17,7 +46,6 @@ export async function POST(req: Request) {
 
   const { matchId, locationName, locationUrl } = parsed.data;
 
-  // Upsert: one invite per inviter per match
   const existing = await db
     .select({ id: watchInvites.id })
     .from(watchInvites)
@@ -35,12 +63,7 @@ export async function POST(req: Request) {
 
   const [invite] = await db
     .insert(watchInvites)
-    .values({
-      inviterId: session.user.id,
-      matchId,
-      locationName,
-      locationUrl: locationUrl || null,
-    })
+    .values({ inviterId: session.user.id, matchId, locationName, locationUrl: locationUrl || null })
     .returning();
 
   return NextResponse.json({ invite }, { status: 201 });
@@ -56,9 +79,7 @@ export async function DELETE(req: Request) {
 
   await db
     .delete(watchInvites)
-    .where(
-      and(eq(watchInvites.inviterId, session.user.id), eq(watchInvites.matchId, matchId))
-    );
+    .where(and(eq(watchInvites.inviterId, session.user.id), eq(watchInvites.matchId, matchId)));
 
   return NextResponse.json({ ok: true });
 }

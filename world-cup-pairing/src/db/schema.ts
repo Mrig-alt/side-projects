@@ -83,6 +83,33 @@ export const connections = pgTable("connections", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ─── Friend Groups ────────────────────────────────────────────────────────────
+
+export const friendGroups = pgTable("friend_groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 100 }).notNull(),
+  inviteCode: varchar("invite_code", { length: 8 }).notNull().unique(),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => students.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const groupMembers = pgTable(
+  "group_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => friendGroups.id, { onDelete: "cascade" }),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.groupId, t.studentId)]
+);
+
 // ─── Matches ──────────────────────────────────────────────────────────────────
 
 export const matches = pgTable("matches", {
@@ -198,6 +225,8 @@ export type Bet = typeof bets.$inferSelect;
 export type MatchReaction = typeof matchReactions.$inferSelect;
 export type MatchVibe = typeof matchVibes.$inferSelect;
 export type WatchInvite = typeof watchInvites.$inferSelect;
+export type FriendGroup = typeof friendGroups.$inferSelect;
+export type GroupMember = typeof groupMembers.$inferSelect;
 
 export type MatchStatus = (typeof matchStatusEnum.enumValues)[number];
 export type MatchStage = (typeof matchStageEnum.enumValues)[number];
