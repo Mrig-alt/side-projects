@@ -11,6 +11,9 @@ export default async function HomePage() {
   try {
   const session = await auth();
 
+  // Guard: if session exists but user.id is missing (stale/broken JWT), treat as logged out
+  const validSession = session?.user?.id ? session : null;
+
   const now = new Date();
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
@@ -54,12 +57,12 @@ export default async function HomePage() {
     .from(students)
     .where(eq(students.flagged, false));
 
-  // Current user's predictions
-  const myPredictions = session
+  // Current user's predictions — only if we have a valid session with an id
+  const myPredictions = validSession
     ? await db
         .select()
         .from(predictions)
-        .where(eq(predictions.studentId, session.user.id))
+        .where(eq(predictions.studentId, validSession.user.id))
     : [];
 
   // Watch invites for today's matches
@@ -94,10 +97,10 @@ export default async function HomePage() {
         liveCount={liveCount}
         upcomingCount={upcomingCount}
         nextMatch={nextMatch}
-        tokenBalance={session?.user.tokenBalance}
+        tokenBalance={validSession?.user.tokenBalance}
       />
 
-      {!session && (
+      {!validSession && (
         <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-center">
           <p className="text-sm text-green-700 font-medium">
             🏆 Join the class to see your pairings and bet tokens!
@@ -134,10 +137,10 @@ export default async function HomePage() {
 
               const myPred = myPredictions.find((p) => p.matchId === match.id);
               const myInvite = todayInvites.find(
-                (i) => i.matchId === match.id && i.inviterId === session?.user.id
+                (i) => i.matchId === match.id && i.inviterId === validSession?.user.id
               );
 
-              const myTeamId = session?.user.teamId;
+              const myTeamId = validSession?.user.teamId;
               const isOnTeam1 = myTeamId === match.team1Id;
               const isOnTeam2 = myTeamId === match.team2Id;
               const opponentSupporters = isOnTeam1
@@ -173,8 +176,8 @@ export default async function HomePage() {
                     name: s.name,
                     lastSeenAt: s.lastSeenAt,
                   }))}
-                  currentUserId={session?.user.id}
-                  currentUserTeamId={session?.user.teamId}
+                  currentUserId={validSession?.user.id}
+                  currentUserTeamId={validSession?.user.teamId}
                   prediction={
                     myPred
                       ? {
