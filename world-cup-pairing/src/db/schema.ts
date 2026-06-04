@@ -41,6 +41,16 @@ export const connectionStatusEnum = pgEnum("connection_status", [
   "accepted",
 ]);
 
+export const liveReportStatusEnum = pgEnum("live_report_status", [
+  "buzzing",
+  "getting_busy",
+  "packed",
+  "queue_outside",
+  "entry_fee",
+  "good_screens",
+  "quiet_now",
+]);
+
 // ─── Teams ────────────────────────────────────────────────────────────────────
 
 export const teams = pgTable("teams", {
@@ -232,6 +242,22 @@ export const watchInvites = pgTable("watch_invites", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ─── Live Reports ─────────────────────────────────────────────────────────────
+
+export const liveReports = pgTable("live_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studentId: uuid("student_id")
+    .references(() => students.id, { onDelete: "cascade" }),
+  venueId: uuid("venue_id")
+    .references(() => venues.id, { onDelete: "set null" }),
+  venueName: varchar("venue_name", { length: 200 }),
+  matchId: uuid("match_id")
+    .references(() => matches.id, { onDelete: "set null" }),
+  status: liveReportStatusEnum("status").notNull(),
+  comment: text("comment"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ─── Inferred Types ───────────────────────────────────────────────────────────
 
 export type Team = typeof teams.$inferSelect;
@@ -245,6 +271,8 @@ export type WatchInvite = typeof watchInvites.$inferSelect;
 export type FriendGroup = typeof friendGroups.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
 export type Venue = typeof venues.$inferSelect;
+export type LiveReport = typeof liveReports.$inferSelect;
+export type LiveReportStatus = (typeof liveReportStatusEnum.enumValues)[number];
 
 export type MatchStatus = (typeof matchStatusEnum.enumValues)[number];
 export type MatchStage = (typeof matchStageEnum.enumValues)[number];
