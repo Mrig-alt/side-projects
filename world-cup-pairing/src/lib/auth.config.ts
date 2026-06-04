@@ -1,12 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 
-/**
- * Edge-safe auth config — no database imports.
- * Used by the proxy/middleware (Edge runtime) and spread into the full
- * config in auth.ts (Node runtime, where the Credentials provider lives).
- */
 export const authConfig = {
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 180 }, // 6 months
   pages: {
     signIn: "/join",
   },
@@ -14,7 +9,6 @@ export const authConfig = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // Explicitly store id on token (token.sub is set by NextAuth but we mirror it)
         token.id = user.id as string;
         token.sub = user.id as string;
         token.teamId = (user as { teamId?: string | null }).teamId ?? null;
@@ -24,7 +18,6 @@ export const authConfig = {
       return token;
     },
     async session({ session, token }) {
-      // token.sub is the canonical NextAuth v5 user id field
       const userId = (token.id ?? token.sub) as string | undefined;
       if (session?.user && userId) {
         session.user.id = userId;

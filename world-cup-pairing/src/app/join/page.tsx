@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import TeamGrid from "@/components/teams/TeamGrid";
@@ -8,10 +8,10 @@ import VisibilitySelector from "@/components/profile/VisibilitySelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Trophy } from "lucide-react";
-import { useEffect } from "react";
+import { Trophy, Loader2, CheckCircle2 } from "lucide-react";
 
 type Visibility = "public" | "friends" | "stealth";
+type Mode = "checking" | "returning" | "new" | "idle";
 
 interface Team {
   id: string;
@@ -26,7 +26,6 @@ interface Team {
 function formatError(error: unknown): string {
   if (typeof error === "string") return error;
   if (typeof error === "object" && error !== null) {
-    // Zod field errors come back as { field: ["message"] }
     const msgs = Object.entries(error)
       .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs[0] : msgs}`)
       .join(", ");
@@ -39,14 +38,20 @@ export default function JoinPage() {
   const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
   const [step, setStep] = useState<"identity" | "team" | "visibility">("identity");
-  const [name, setName] = useState("");
+
   const [email, setEmail] = useState("");
-  const [nationality, setNationality] = useState("");
   const [pin, setPin] = useState("");
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const [visibility, setVisibility] = useState<Visibility>("public");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [mode, setMode] = useState<Mode>("idle");
+  const [firstName, setFirstName] = useState<string | null>(null);
+  const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [name, setName] = useState("");
+  const [nationality, setNationality] = useState("");
+  const [teamId, setTeamId] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<Visibility>("public");
   const [studentCount, setStudentCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -58,11 +63,49 @@ export default function JoinPage() {
       });
   }, []);
 
+  useEffect(() => {
+    if (checkTimer.current) clearTimeout(checkTimer.current);
+    const trimmed = email.trim();
+    if (!trimmed.includes("@") || !trimmed.includes(".")) {
+      setMode("idle");
+      setFirstName(null);
+      return;
+    }
+    setMode("checking");
+    checkTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/check-email?email=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        setMode(data.exists ? "returning" : "new");
+        setFirstName(data.firstName ?? null);
+      } catch {
+        setMode("idle");
+      }
+    }, 600);
+    return () => { if (checkTimer.current) clearTimeout(checkTimer.current); };
+  }, [email]);
+
   const selectedTeam = teams.find((t) => t.id === teamId);
   const isHonoraryFan = selectedTeam ? selectedTeam.group === null : false;
   const tokenPreview = 100 + (visibility === "public" ? 50 : 0);
 
-  const handleSubmit = async () => {
+  const handleSignIn = async () => {
+    setLoading(true);
+    setError("");
+    const result = await signIn("credentials", {
+      email: email.trim().toLowerCase(),
+      pin,
+      redirect: false,
+    });
+    setLoading(false);
+    if (result?.ok) {
+      router.push("/");
+    } else {
+      setError("Wrong PIN — ask whoever set up the app for the class PIN.");
+    }
+  };
+
+  const handleRegister = async () => {
     setLoading(true);
     setError("");
     try {
@@ -71,7 +114,7 @@ export default function JoinPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          email,
+          email: email.trim().toLowerCase(),
           nationality: nationality.trim() || undefined,
           pin,
           teamId,
@@ -80,22 +123,15 @@ export default function JoinPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(formatError(data.error));
-        return;
-      }
-      // Sign in after registration
+      if (!res.ok) { setError(formatError(data.error)); return; }
       const result = await signIn("credentials", {
-        email,
+        email: email.trim().toLowerCase(),
         pin,
         redirect: false,
       });
-      if (result?.ok) {
-        router.push("/");
-      } else {
-        setError("Registered! But auto-login failed — please go to /join and sign in manually.");
-      }
-    } catch (e) {
+      if (result?.ok) router.push("/");
+      else setError("Registered! But auto-login failed — try signing in again.");
+    } catch {
       setError("Network error — please try again");
     } finally {
       setLoading(false);
@@ -106,45 +142,107 @@ export default function JoinPage() {
     <div className="mx-auto max-w-xl space-y-6">
       <div className="text-center">
         <Trophy className="mx-auto h-10 w-10 text-green-600" />
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">Join IE World Cup 2026</h1>
+        <h1 className="mt-2 text-2xl font-bold text-gray-900">IE World Cup 2026</h1>
         {studentCount !== null && (
-          <p className="mt-1 text-sm text-gray-500">
-            🌍 {studentCount} classmates already joined
-          </p>
+          <p className="mt-1 text-sm text-gray-500">🌍 {studentCount} classmates already joined</p>
         )}
       </div>
 
-      {step === "identity" && (
-        <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
-          <h2 className="font-semibold text-gray-900">Your details</h2>
-          <div className="grid gap-1.5">
-            <Label htmlFor="name">Full name *</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="María García" />
+      <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
+        <div className="grid gap-1.5">
+          <Label htmlFor="email">Your email</Label>
+          <div className="relative">
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(""); }}
+              placeholder="maria@student.ie.edu"
+              className="pr-8"
+              autoComplete="email"
+            />
+            {mode === "checking" && (
+              <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-gray-400" />
+            )}
+            {mode === "returning" && (
+              <CheckCircle2 className="absolute right-2.5 top-2.5 h-4 w-4 text-green-500" />
+            )}
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="email">Email *</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="maria@student.ie.edu" />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="nationality">Nationality (optional)</Label>
-            <Input id="nationality" value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="Spanish" />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="pin">Class PIN *</Label>
-            <Input id="pin" type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="Enter class PIN" />
-          </div>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <Button
-            className="w-full"
-            disabled={!name.trim() || !email.trim() || !pin.trim()}
-            onClick={() => setStep("team")}
-          >
-            Continue
-          </Button>
         </div>
-      )}
 
-      {step === "team" && (
+        {/* RETURNING USER */}
+        {mode === "returning" && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-green-50 px-4 py-3">
+              <p className="text-sm font-medium text-green-800">
+                👋 Welcome back{firstName ? `, ${firstName}` : ""}! Just enter the class PIN to continue.
+              </p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="pin-return">Class PIN</Label>
+              <Input
+                id="pin-return"
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder="Enter class PIN"
+                autoComplete="current-password"
+                onKeyDown={(e) => e.key === "Enter" && pin && handleSignIn()}
+              />
+            </div>
+            {error && <p className="text-sm text-red-500">{error}</p>}
+            <Button className="w-full" disabled={!pin.trim() || loading} onClick={handleSignIn}>
+              {loading ? "Signing in..." : "Sign in →"}
+            </Button>
+          </div>
+        )}
+
+        {/* NEW USER — step 1 */}
+        {mode === "new" && step === "identity" && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">New here — let&apos;s get you set up 🎉</p>
+            <div className="grid gap-1.5">
+              <Label htmlFor="name">Full name *</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="María García"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="nationality">Nationality (optional)</Label>
+              <Input
+                id="nationality"
+                value={nationality}
+                onChange={(e) => setNationality(e.target.value)}
+                placeholder="Spanish"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="pin-new">Class PIN *</Label>
+              <Input
+                id="pin-new"
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder="Enter class PIN"
+              />
+            </div>
+            {error && <p className="text-sm text-red-500">{error}</p>}
+            <Button
+              className="w-full"
+              disabled={!name.trim() || !pin.trim()}
+              onClick={() => setStep("team")}
+            >
+              Continue → Pick your team
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* NEW USER — step 2: pick team */}
+      {mode === "new" && step === "team" && (
         <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Pick your team</h2>
@@ -155,22 +253,15 @@ export default function JoinPage() {
               </span>
             )}
           </div>
-          <TeamGrid
-            teams={teams}
-            selectedTeamId={teamId}
-            onSelect={setTeamId}
-          />
-          <Button
-            className="w-full mt-2"
-            disabled={!teamId}
-            onClick={() => setStep("visibility")}
-          >
+          <TeamGrid teams={teams} selectedTeamId={teamId} onSelect={setTeamId} />
+          <Button className="w-full mt-2" disabled={!teamId} onClick={() => setStep("visibility")}>
             Continue
           </Button>
         </div>
       )}
 
-      {step === "visibility" && (
+      {/* NEW USER — step 3: privacy */}
+      {mode === "new" && step === "visibility" && (
         <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
           <h2 className="font-semibold text-gray-900">Privacy mode</h2>
           <VisibilitySelector value={visibility} onChange={setVisibility} />
@@ -179,8 +270,8 @@ export default function JoinPage() {
             {visibility === "public" && <span className="text-yellow-600"> (includes +50 public bonus 🎉)</span>}
           </div>
           {error && <p className="text-sm text-red-500">{error}</p>}
-          <Button className="w-full" onClick={handleSubmit} loading={loading}>
-            Join the game 🏆
+          <Button className="w-full" onClick={handleRegister} disabled={loading}>
+            {loading ? "Joining..." : "Join the game 🏆"}
           </Button>
           <button
             type="button"
