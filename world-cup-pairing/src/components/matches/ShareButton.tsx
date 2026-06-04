@@ -13,14 +13,14 @@ interface ShareButtonProps {
 }
 
 export default function ShareButton({ matchId, team1, team2, myTeam, prediction }: ShareButtonProps) {
-  const appUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const matchUrl = `${appUrl}/matches/${matchId}`;
-
-  const text = myTeam
-    ? `${myTeam.flagEmoji} I'm rooting for ${myTeam.name} tonight! ${team1.flagEmoji} ${team1.name} vs ${team2.flagEmoji} ${team2.name}${prediction ? ` — my prediction: ${prediction}` : ""}. Will you watch? ${matchUrl}`
-    : `${team1.flagEmoji} ${team1.name} vs ${team2.flagEmoji} ${team2.name} — follow the class pairings! ${matchUrl}`;
-
   const handleShare = async () => {
+    // window.location is only accessed inside the click handler — never during SSR
+    const matchUrl = `${window.location.origin}/matches/${matchId}`;
+
+    const text = myTeam
+      ? `${myTeam.flagEmoji} I'm rooting for ${myTeam.name} tonight! ${team1.flagEmoji} ${team1.name} vs ${team2.flagEmoji} ${team2.name}${prediction ? ` — my prediction: ${prediction}` : ""}. Will you watch? ${matchUrl}`
+      : `${team1.flagEmoji} ${team1.name} vs ${team2.flagEmoji} ${team2.name} — follow the class pairings! ${matchUrl}`;
+
     if (navigator.share) {
       try {
         await navigator.share({ text, url: matchUrl });
