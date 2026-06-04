@@ -4,16 +4,14 @@ import { db } from "@/db";
 import { students, teams } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import Link from "next/link";
+import AdminTable from "@/components/admin/AdminTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  // Auth via session — no ?key= URL param (leaks to logs/Referer/history)
   const session = await auth();
   const adminEmail = process.env.ADMIN_EMAIL;
 
-  // FIX: session.user.email now exists on the Session type and is populated
-  // by the session callback. Falls back to blocking if ADMIN_EMAIL is unset.
   if (!session?.user?.id || !adminEmail || session.user.email !== adminEmail) {
     redirect("/");
   }
@@ -95,44 +93,8 @@ export default async function AdminPage() {
 
       <section>
         <h2 className="text-base font-semibold text-gray-900 mb-3">All Students</h2>
-        <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-              <tr>
-                <th className="px-3 py-2 text-left">Name</th>
-                <th className="px-3 py-2 text-left">Email</th>
-                <th className="px-3 py-2 text-left">Team</th>
-                <th className="px-3 py-2 text-left">Mode</th>
-                <th className="px-3 py-2 text-right">Tokens</th>
-                <th className="px-3 py-2 text-left">Flagged</th>
-                <th className="px-3 py-2 text-left">Joined</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {rows.map((s) => (
-                <tr key={s.id} className={s.flagged ? "bg-red-50" : ""}>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.name}</td>
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{s.email}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{s.teamFlag} {s.teamName ?? "—"}</td>
-                  <td className="px-3 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      s.visibility === "public" ? "bg-green-100 text-green-700" :
-                      s.visibility === "friends" ? "bg-blue-100 text-blue-700" :
-                      "bg-gray-100 text-gray-600"
-                    }`}>{s.visibility}</span>
-                  </td>
-                  <td className="px-3 py-2 text-right">{s.tokenBalance}</td>
-                  <td className="px-3 py-2">
-                    {s.flagged && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">flagged</span>}
-                  </td>
-                  <td className="px-3 py-2 text-gray-400 whitespace-nowrap text-xs">
-                    {new Date(s.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* FIX: interactive flag/unflag buttons live in AdminTable (client component) */}
+        <AdminTable students={rows} />
       </section>
     </div>
   );
