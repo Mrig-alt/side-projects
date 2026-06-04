@@ -9,6 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function WatchMapPage() {
   const session = await auth();
 
+  // FIX #9: filter out flagged inviters at the DB level so their watch plans
+  // don't appear on the public watchmap. Previously this was an unscoped full
+  // table scan that returned every row regardless of flagged status.
   const allInvites = await db
     .select({
       id: watchInvites.id,
@@ -20,7 +23,8 @@ export default async function WatchMapPage() {
       inviterName: students.name,
     })
     .from(watchInvites)
-    .innerJoin(students, eq(students.id, watchInvites.inviterId));
+    .innerJoin(students, eq(students.id, watchInvites.inviterId))
+    .where(eq(students.flagged, false));
 
   const allMatches = await db
     .select({

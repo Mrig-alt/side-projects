@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { students, teams } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-function checkAdmin(req: Request) {
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${process.env.ADMIN_SECRET}`;
+function isAdmin(email: string | undefined) {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  return !!adminEmail && email === adminEmail;
 }
 
+// FIX #10: GET now uses session auth (same ADMIN_EMAIL gate as the page +
+// /api/admin/moderate) instead of a Bearer token that leaks in server logs.
+// The old PATCH is removed — moderation lives at /api/admin/moderate instead.
 export async function GET(req: Request) {
-  if (!checkAdmin(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const session = await auth();
+  if (!isAdmin(session?.user?.email)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const rows = await db
     .select({
@@ -49,20 +56,4 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({ students: rows });
-}
-
-export async function PATCH(req: Request) {
-  if (!checkAdmin(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const body = await req.json();
-  const { id, teamId, visibility, flagged } = body;
-  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-
-  const update: Partial<typeof students.$inferInsert> = {};
-  if (teamId !== undefined) update.teamId = teamId;
-  if (visibility !== undefined) update.visibility = visibility;
-  if (flagged !== undefined) update.flagged = flagged;
-
-  const [updated] = await db.update(students).set(update).where(eq(students.id, id)).returning();
-  return NextResponse.json({ student: updated });
 }
