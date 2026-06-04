@@ -4,6 +4,7 @@ import { matches, teams, students, predictions, watchInvites } from "@/db/schema
 import { eq, and, gte, lte, asc, inArray } from "drizzle-orm";
 import TodayHero from "@/components/matches/TodayHero";
 import MatchCard from "@/components/matches/MatchCard";
+import JoinBanner from "@/components/home/JoinBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,6 @@ export default async function HomePage() {
       ? await db.select().from(predictions).where(eq(predictions.studentId, validSession.user.id))
       : [];
 
-    // FIX: only load watch invites for today's matches — not the entire table
     const todayMatchIds = todayMatches.map((m) => m.id);
     const todayInvites =
       todayMatchIds.length > 0
@@ -53,7 +53,7 @@ export default async function HomePage() {
               locationUrl: watchInvites.locationUrl,
             })
             .from(watchInvites)
-            .where(inArray(watchInvites.matchId, todayMatchIds))  // FIX: scoped query
+            .where(inArray(watchInvites.matchId, todayMatchIds))
         : [];
 
     const liveCount = todayMatches.filter((m) => m.status === "live").length;
@@ -71,15 +71,11 @@ export default async function HomePage() {
       <div className="space-y-6">
         <TodayHero liveCount={liveCount} upcomingCount={upcomingCount} nextMatch={nextMatch} tokenBalance={validSession?.user.tokenBalance} />
 
-        {!validSession && (
-          <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-center">
-            <p className="text-sm text-green-700 font-medium">🏆 Join the class to see your pairings and bet tokens!</p>
-            <a href="/join" className="mt-2 inline-block rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">Join now</a>
-          </div>
-        )}
+        {/* Client component — uses useSession() so it always reflects true auth state */}
+        <JoinBanner />
 
         <section>
-          <h2 className="text-lg font-bold text-gray-900 mb-3">{liveCount > 0 ? "🔴 Live now" : "Today's matches"}</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-3">{liveCount > 0 ? "\uD83D\uDD34 Live now" : "Today's matches"}</h2>
           {todayMatches.length === 0 ? (
             <p className="text-sm text-gray-400 py-8 text-center">No matches today — check the schedule for upcoming games.</p>
           ) : (
@@ -88,7 +84,6 @@ export default async function HomePage() {
                 const t1 = match.team1Id ? teamMap.get(match.team1Id) ?? null : null;
                 const t2 = match.team2Id ? teamMap.get(match.team2Id) ?? null : null;
 
-                // FIX: guard null teamId — null===null would match all teamless students to all TBD matches
                 const team1Supporters = match.team1Id !== null
                   ? allStudents.filter((s) => s.teamId === match.team1Id && s.visibility !== "stealth")
                   : [];
@@ -100,7 +95,6 @@ export default async function HomePage() {
                 const myInvite = todayInvites.find((i) => i.matchId === match.id && i.inviterId === validSession?.user.id);
 
                 const myTeamId = validSession?.user.teamId;
-                // FIX: only consider user on a team if their teamId is non-null
                 const isOnTeam1 = myTeamId !== null && myTeamId !== undefined && myTeamId === match.team1Id;
                 const isOnTeam2 = myTeamId !== null && myTeamId !== undefined && myTeamId === match.team2Id;
                 const opponentSupporters = isOnTeam1 ? team2Supporters : isOnTeam2 ? team1Supporters : [];
@@ -142,7 +136,6 @@ export default async function HomePage() {
       </div>
     );
   } catch (e) {
-    // FIX: never expose stack traces in production HTML
     console.error("[home] render error", e);
     return (
       <div className="rounded-xl border border-red-100 bg-red-50 p-6 text-center text-sm text-red-600 m-4">
