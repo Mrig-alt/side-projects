@@ -5,31 +5,35 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import VisibilitySelector from "@/components/profile/VisibilitySelector";
+import { useLiveProfile } from "@/hooks/useLiveProfile";
 
 type Visibility = "public" | "friends" | "stealth";
 
 export default function AccountPage() {
   const { data: session, update } = useSession();
   const router = useRouter();
-  const [visibility, setVisibility] = useState<Visibility>((session?.user.visibility as Visibility) ?? "public");
+  const profile = useLiveProfile();
+
+  // Seed visibility from live profile, fall back to session JWT
+  const [visibility, setVisibility] = useState<Visibility>(
+    (profile?.visibility ?? session?.user?.visibility ?? "public") as Visibility
+  );
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [liveTokens, setLiveTokens] = useState<number | null>(null);
 
+  // Update visibility selector when live profile loads
   useEffect(() => {
-    if (!session?.user?.id) return;
-    fetch("/api/students/me")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.tokenBalance != null) setLiveTokens(d.tokenBalance); })
-      .catch(() => {});
-  }, [session?.user?.id]);
+    if (profile?.visibility) {
+      setVisibility(profile.visibility as Visibility);
+    }
+  }, [profile?.visibility]);
 
   if (!session) {
     router.push("/join");
     return null;
   }
 
-  const displayTokens = liveTokens ?? session.user.tokenBalance ?? 0;
+  const displayTokens = profile?.tokenBalance ?? session.user.tokenBalance ?? 0;
 
   const handleSave = async () => {
     setLoading(true);
@@ -41,6 +45,8 @@ export default function AccountPage() {
       });
       if (res.ok) {
         await update({ visibility });
+        // Fire token-refresh so useLiveProfile re-fetches
+        window.dispatchEvent(new Event("token-refresh"));
         setSaved(true);
       }
     } finally {
@@ -59,11 +65,11 @@ export default function AccountPage() {
             <p className="text-sm text-gray-500">{session.user.email}</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-yellow-600">\uD83E\uDE99 {displayTokens}</span>
+            <span className="text-lg font-bold text-yellow-600">🪙 {displayTokens}</span>
           </div>
         </div>
         <div className="flex gap-3 pt-1">
-          <a href="/leaderboard" className="text-xs text-green-600 hover:underline">See leaderboard \u2192</a>
+          <a href="/leaderboard" className="text-xs text-green-600 hover:underline">See leaderboard →</a>
         </div>
       </div>
 
@@ -74,7 +80,7 @@ export default function AccountPage() {
           onChange={(v) => { setVisibility(v); setSaved(false); }}
         />
         <Button onClick={handleSave} loading={loading} className="w-full">
-          {saved ? "\u2713 Saved" : "Save changes"}
+          {saved ? "✓ Saved" : "Save changes"}
         </Button>
       </div>
 
@@ -89,11 +95,10 @@ export default function AccountPage() {
         </a>
       </div>
 
-      {/* Sign out — no callbackUrl so NextAuth uses its default (signIn page = /join) */}
       <Button
         variant="outline"
         className="w-full text-red-600 border-red-200 hover:bg-red-50"
-        onClick={() => signOut()}
+        onClick={() => signOut({ redirectTo: "/join" })}
       >
         Sign out
       </Button>
