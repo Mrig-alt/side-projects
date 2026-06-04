@@ -61,12 +61,11 @@ export default async function FeedPage() {
       </div>
     );
   } catch (e) {
+    // FIX: log full error server-side only — never expose stack/message in HTML
+    console.error("[feed] render error", e);
     return (
-      <div style={{ padding: 24, background: "#fef2f2", borderRadius: 8, margin: 16 }}>
-        <h2 style={{ fontWeight: 700, color: "#991b1b", marginBottom: 8 }}>Feed render error (debug):</h2>
-        <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", color: "#7f1d1d" }}>
-          {e instanceof Error ? `${e.message}\n\n${e.stack}` : String(e)}
-        </pre>
+      <div className="rounded-xl border border-red-100 bg-red-50 p-6 text-center text-sm text-red-600 m-4">
+        Something went wrong loading the feed. Please refresh or try again shortly.
       </div>
     );
   }
