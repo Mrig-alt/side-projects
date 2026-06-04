@@ -60,6 +60,7 @@ export default function MatchCard({
   const isUpcoming = match.status === "upcoming";
   const isFriendly = match.stage === "friendly";
   const [showWatchCard, setShowWatchCard] = useState(false);
+  const [showPredict, setShowPredict] = useState(!!prediction);
 
   const myTeamSide =
     currentUserTeamId === match.team1?.id
@@ -77,6 +78,9 @@ export default function MatchCard({
   const t2Name = match.team2?.name ?? match.team2Placeholder ?? "TBD";
   const t1Flag = match.team1?.flagEmoji ?? "\uD83C\uDFF3\uFE0F";
   const t2Flag = match.team2?.flagEmoji ?? "\uD83C\uDFF3\uFE0F";
+
+  // Can predict if logged in, match is upcoming, and both teams are known
+  const canPredict = !!currentUserId && isUpcoming && !!match.team1 && !!match.team2;
 
   return (
     <Card className={isLive ? "ring-2 ring-red-400" : ""}>
@@ -116,6 +120,38 @@ export default function MatchCard({
           </div>
         </Link>
 
+        {/* Prediction callout — show for all logged-in users on upcoming matches with known teams */}
+        {canPredict && (
+          <div className="mt-3">
+            {prediction && !showPredict ? (
+              // Already predicted — show summary chip, tap to edit
+              <button
+                onClick={() => setShowPredict(true)}
+                className="flex items-center gap-1.5 rounded-full bg-yellow-50 border border-yellow-200 px-3 py-1 text-xs font-medium text-yellow-700 hover:bg-yellow-100 transition-colors"
+              >
+                🏆 Your prediction: {prediction.predictedScore1}–{prediction.predictedScore2} · <span className="underline">edit</span>
+              </button>
+            ) : !prediction && !showPredict ? (
+              // No prediction yet — prominent CTA
+              <button
+                onClick={() => setShowPredict(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors w-full justify-center"
+              >
+                🏆 Predict the score → earn tokens
+              </button>
+            ) : (
+              <PredictionForm
+                matchId={match.id}
+                team1={match.team1!}
+                team2={match.team2!}
+                existing={prediction}
+                locked={false}
+                onDone={() => setShowPredict(false)}
+              />
+            )}
+          </div>
+        )}
+
         {/* Watch together nudge from opponent */}
         {opponentWatchInvite && (
           <div className="mt-3 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
@@ -133,7 +169,7 @@ export default function MatchCard({
           </div>
         )}
 
-        {/* Watch together full card — toggled for all matches */}
+        {/* Watch together full card */}
         {isUpcoming && (
           <div className="mt-3">
             <button
@@ -152,18 +188,9 @@ export default function MatchCard({
           </div>
         )}
 
-        {/* Actions */}
+        {/* Actions row */}
         {currentUserId && isUpcoming && (
-          <div className="mt-3 space-y-2">
-            {match.team1 && match.team2 && (
-              <PredictionForm
-                matchId={match.id}
-                team1={match.team1}
-                team2={match.team2}
-                existing={prediction}
-                locked={false}
-              />
-            )}
+          <div className="mt-3">
             <div className="flex items-center gap-2 flex-wrap">
               {myTeamSide && (
                 <WatchTogetherButton matchId={match.id} existingInvite={myWatchInvite} />

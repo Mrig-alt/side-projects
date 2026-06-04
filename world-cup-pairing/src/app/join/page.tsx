@@ -40,7 +40,6 @@ export default function JoinPage() {
   const [step, setStep] = useState<"identity" | "team" | "visibility">("identity");
 
   const [email, setEmail] = useState("");
-  const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -54,12 +53,18 @@ export default function JoinPage() {
   const [visibility, setVisibility] = useState<Visibility>("public");
   const [studentCount, setStudentCount] = useState<number | null>(null);
 
+  // Whether PIN is required (env-driven — detected via a lightweight probe)
+  const [pinRequired, setPinRequired] = useState(false);
+  const [pin, setPin] = useState("");
+
   useEffect(() => {
     fetch("/api/register")
       .then((r) => r.json())
       .then((d) => {
         setTeams(d.teams ?? []);
         setStudentCount(d.count ?? null);
+        // Server tells us if PIN is enforced
+        setPinRequired(!!d.pinRequired);
       });
   }, []);
 
@@ -94,14 +99,14 @@ export default function JoinPage() {
     setError("");
     const result = await signIn("credentials", {
       email: email.trim().toLowerCase(),
-      pin,
+      pin: pin || "",
       redirect: false,
     });
     setLoading(false);
     if (result?.ok) {
       router.push("/");
     } else {
-      setError("Wrong PIN — ask whoever set up the app for the class PIN.");
+      setError(pinRequired ? "Wrong PIN — ask whoever set up the app for the class PIN." : "Sign in failed — please try again.");
     }
   };
 
@@ -116,9 +121,7 @@ export default function JoinPage() {
           name,
           email: email.trim().toLowerCase(),
           nationality: nationality.trim() || undefined,
-          pin,
-          // FIX: send undefined (not null) when no team selected so Zod
-          // .string().uuid().optional() passes cleanly without a null coercion error
+          ...(pinRequired && pin ? { pin } : {}),
           teamId: teamId || undefined,
           isHonoraryFan,
           visibility,
@@ -128,7 +131,7 @@ export default function JoinPage() {
       if (!res.ok) { setError(formatError(data.error)); return; }
       const result = await signIn("credentials", {
         email: email.trim().toLowerCase(),
-        pin,
+        pin: pin || "",
         redirect: false,
       });
       if (result?.ok) router.push("/");
@@ -177,23 +180,26 @@ export default function JoinPage() {
           <div className="space-y-4">
             <div className="rounded-lg bg-green-50 px-4 py-3">
               <p className="text-sm font-medium text-green-800">
-                👋 Welcome back{firstName ? `, ${firstName}` : ""}! Just enter the class PIN to continue.
+                👋 Welcome back{firstName ? `, ${firstName}` : ""}!
+                {pinRequired ? " Enter the class PIN to continue." : " Click below to sign in."}
               </p>
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="pin-return">Class PIN</Label>
-              <Input
-                id="pin-return"
-                type="password"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="Enter class PIN"
-                autoComplete="current-password"
-                onKeyDown={(e) => e.key === "Enter" && pin && handleSignIn()}
-              />
-            </div>
+            {pinRequired && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="pin-return">Class PIN</Label>
+                <Input
+                  id="pin-return"
+                  type="password"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="Enter class PIN"
+                  autoComplete="current-password"
+                  onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
+                />
+              </div>
+            )}
             {error && <p className="text-sm text-red-500">{error}</p>}
-            <Button className="w-full" disabled={!pin.trim() || loading} onClick={handleSignIn}>
+            <Button className="w-full" disabled={loading} onClick={handleSignIn}>
               {loading ? "Signing in..." : "Sign in →"}
             </Button>
           </div>
@@ -221,20 +227,22 @@ export default function JoinPage() {
                 placeholder="Spanish"
               />
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="pin-new">Class PIN *</Label>
-              <Input
-                id="pin-new"
-                type="password"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="Enter class PIN"
-              />
-            </div>
+            {pinRequired && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="pin-new">Class PIN *</Label>
+                <Input
+                  id="pin-new"
+                  type="password"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="Enter class PIN"
+                />
+              </div>
+            )}
             {error && <p className="text-sm text-red-500">{error}</p>}
             <Button
               className="w-full"
-              disabled={!name.trim() || !pin.trim()}
+              disabled={!name.trim() || (pinRequired && !pin.trim())}
               onClick={() => setStep("team")}
             >
               Continue → Pick your team

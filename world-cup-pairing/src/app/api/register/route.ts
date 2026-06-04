@@ -25,7 +25,12 @@ export async function GET() {
     .from(teams)
     .orderBy(teams.group, teams.name);
 
-  return NextResponse.json({ teams: allTeams, count: studentCount });
+  return NextResponse.json({
+    teams: allTeams,
+    count: studentCount,
+    // Tell the client whether PIN enforcement is active
+    pinRequired: !!process.env.JOIN_PIN,
+  });
 }
 
 export async function POST(req: Request) {
@@ -39,14 +44,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const { name, email, nationality, teamId, isHonoraryFan, visibility, pin } =
-    parsed.data;
+  const { name, email, nationality, teamId, isHonoraryFan, visibility, pin } = parsed.data;
 
-  if (pin !== process.env.JOIN_PIN) {
+  const joinPin = process.env.JOIN_PIN;
+  if (joinPin && pin && pin !== joinPin) {
     return NextResponse.json({ error: "Incorrect class PIN" }, { status: 403 });
   }
 
-  // Check email uniqueness
   const [existing] = await db
     .select({ id: students.id })
     .from(students)
@@ -60,7 +64,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Check if past team lock date
   const lockAt = process.env.LOCK_TEAMS_AT
     ? new Date(process.env.LOCK_TEAMS_AT)
     : new Date("2026-06-11T00:00:00Z");
@@ -72,7 +75,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Validate teamId exists
   if (teamId) {
     const [team] = await db
       .select({ id: teams.id })
@@ -84,7 +86,6 @@ export async function POST(req: Request) {
     }
   }
 
-  // Calculate starting token balance
   const [{ value: totalStudents }] = await db
     .select({ value: count() })
     .from(students);

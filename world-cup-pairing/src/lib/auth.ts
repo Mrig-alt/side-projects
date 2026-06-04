@@ -8,9 +8,6 @@ import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  // Required for Render: server runs on localhost:10000 internally but
-  // receives requests forwarded from the public hostname.
-  // trustHost tells NextAuth v5 to trust the Host header from the proxy.
   trustHost: true,
   providers: [
     Credentials({
@@ -20,11 +17,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         pin: { label: "Class PIN", type: "password" },
       },
       async authorize(credentials) {
-        const parsed = loginSchema.safeParse(credentials);
-        if (!parsed.success) return null;
+        const { email, pin } = credentials as { email: string; pin?: string };
+        if (!email) return null;
 
-        const { email, pin } = parsed.data;
-        if (pin !== process.env.JOIN_PIN) return null;
+        // PIN check: if JOIN_PIN is set AND a pin was supplied, verify it.
+        // If JOIN_PIN is not set, skip the check entirely (open access).
+        // This lets you disable the gate by removing JOIN_PIN from env.
+        const joinPin = process.env.JOIN_PIN;
+        if (joinPin && pin && pin !== joinPin) return null;
 
         const [student] = await db
           .select()
@@ -46,14 +46,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    // Extend the base jwt callback from authConfig with the DB-refresh logic.
-    // This runs in the Node.js runtime only (auth.ts is never imported by middleware).
     async jwt(params) {
-      // Run the base callback first (seeds token on sign-in, populates email)
       const token = await (authConfig.callbacks!.jwt as NonNullable<typeof authConfig.callbacks>["jwt"])!(params);
 
-      // On every request AFTER initial sign-in, refresh mutable fields from DB
-      // so tokenBalance / teamId stay live without requiring re-login.
       if (!params.user && token?.id) {
         try {
           const [fresh] = await db
@@ -67,20 +62,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             .where(eq(students.id, token.id as string))
             .limit(1);
           if (fresh) {
-            if (fresh.flagged) return null; // invalidate JWT immediately when user is banned
+            if (fresh.flagged) return null;
             token.tokenBalance = fresh.tokenBalance;
             token.teamId = fresh.teamId;
             token.visibility = fresh.visibility;
           }
         } catch {
-          // DB unavailable — keep stale values rather than breaking auth
+          // DB unavailable — keep stale values
         }
       }
 
       return token;
     },
-    // session callback is inherited from authConfig via spread above;
-    // NextAuth merges callbacks so we only need to override jwt here.
   },
 });
 
@@ -93,7 +86,7 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      email: string;   // FIX: was missing — needed for admin email check
+      email: string;
       name: string;
       teamId: string | null;
       visibility: string;

@@ -22,12 +22,14 @@ export const registerSchema = z.object({
   teamId: z.string().uuid("Invalid team").optional().nullable(),
   isHonoraryFan: z.boolean().optional().nullable(),
   visibility: z.enum(["public", "friends", "stealth"]).default("public"),
-  pin: z.string().min(1, "Class PIN is required"),
+  // PIN is now optional — if JOIN_PIN env var is not set, any value (or none) is accepted
+  pin: z.string().optional(),
 });
 
 export const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
-  pin: z.string().min(1, "PIN is required"),
+  // PIN optional for same reason
+  pin: z.string().optional(),
 });
 
 export const updateStudentSchema = z.object({

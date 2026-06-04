@@ -2,10 +2,24 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 import { Trophy, Coins } from "lucide-react";
 
 export default function Header() {
   const { data: session } = useSession();
+  const [liveTokens, setLiveTokens] = useState<number | null>(null);
+
+  // Fetch live token balance from DB on mount and whenever the session user changes.
+  // useSession() only has the JWT snapshot — it goes stale after predictions/bets.
+  useEffect(() => {
+    if (!session?.user?.id) { setLiveTokens(null); return; }
+    fetch("/api/students/me")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.tokenBalance != null) setLiveTokens(d.tokenBalance); })
+      .catch(() => {});
+  }, [session?.user?.id]);
+
+  const displayTokens = liveTokens ?? session?.user?.tokenBalance ?? 0;
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-sm">
@@ -30,7 +44,7 @@ export default function Header() {
             <>
               <Link href="/account" className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900">
                 <Coins className="h-4 w-4 text-yellow-500" />
-                <span>{session.user.tokenBalance ?? 0}</span>
+                <span>{displayTokens}</span>
               </Link>
               <Link href="/account" className="text-sm font-medium text-gray-600 hover:text-gray-900 truncate max-w-[100px]">
                 {session.user.name?.split(" ")[0]}
