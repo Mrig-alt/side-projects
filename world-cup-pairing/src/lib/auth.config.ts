@@ -5,12 +5,15 @@ import type { NextAuthConfig } from "next-auth";
 // DB-dependent logic (token refresh) lives in auth.ts instead.
 export const authConfig = {
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 180 },
-  pages: { signIn: "/join" },
+  pages: { signIn: "/join", newUser: "/" },
   providers: [],
   callbacks: {
+    authorized({ auth, request: { nextUrl } }) {
+      // Allow all routes — no forced redirect loops
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
-        // Initial sign-in: seed all fields from the user object returned by authorize()
         token.id = user.id as string;
         token.sub = user.id as string;
         token.teamId = (user as { teamId?: string | null }).teamId ?? null;

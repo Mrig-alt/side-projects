@@ -1,12 +1,13 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { matches, teams, students, matchReactions, watchInvites, venues } from "@/db/schema";
+import { matches, teams, students, matchReactions, watchInvites, venues, predictions } from "@/db/schema";
 import { eq, and, asc, inArray } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { formatMatchDate, formatKickoff, stageLabel } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import ReactionTimeline from "@/components/matches/ReactionTimeline";
 import LiveReportsWidget from "@/components/watchmap/LiveReportsWidget";
+import PredictionForm from "@/components/matches/PredictionForm";
 import Link from "next/link";
 import { MapPin, ExternalLink, Users } from "lucide-react";
 
@@ -21,46 +22,26 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
 
   const teamIds = [match.team1Id, match.team2Id].filter(Boolean) as string[];
 
-  // Parallelize all independent queries — collapses 7+ sequential round-trips into 2
-  const [fetchedTeams, team1Supporters, team2Supporters, rawInvites, allVenues, reactions] =
+  const [fetchedTeams, team1Supporters, team2Supporters, rawInvites, allVenues, reactions, myPrediction] =
     await Promise.all([
       teamIds.length > 0 ? db.select().from(teams).where(inArray(teams.id, teamIds)) : Promise.resolve([]),
       match.team1Id
-        ? db
-            .select({ id: students.id, name: students.name })
-            .from(students)
+        ? db.select({ id: students.id, name: students.name }).from(students)
             .where(and(eq(students.teamId, match.team1Id), eq(students.flagged, false), eq(students.visibility, "public")))
         : Promise.resolve([]),
       match.team2Id
-        ? db
-            .select({ id: students.id, name: students.name })
-            .from(students)
+        ? db.select({ id: students.id, name: students.name }).from(students)
             .where(and(eq(students.teamId, match.team2Id), eq(students.flagged, false), eq(students.visibility, "public")))
         : Promise.resolve([]),
-      db
-        .select({
-          id: watchInvites.id,
-          inviterId: watchInvites.inviterId,
-          venueId: watchInvites.venueId,
-          locationName: watchInvites.locationName,
-          locationUrl: watchInvites.locationUrl,
-          inviterName: students.name,
-        })
-        .from(watchInvites)
-        .innerJoin(students, eq(students.id, watchInvites.inviterId))
-        .where(eq(watchInvites.matchId, id)),
+      db.select({ id: watchInvites.id, inviterId: watchInvites.inviterId, venueId: watchInvites.venueId, locationName: watchInvites.locationName, locationUrl: watchInvites.locationUrl, inviterName: students.name })
+        .from(watchInvites).innerJoin(students, eq(students.id, watchInvites.inviterId)).where(eq(watchInvites.matchId, id)),
       db.select({ id: venues.id, name: venues.name, area: venues.area, mapsUrl: venues.mapsUrl }).from(venues),
-      db
-        .select({
-          id: matchReactions.id,
-          emoji: matchReactions.emoji,
-          matchMinute: matchReactions.matchMinute,
-          createdAt: matchReactions.createdAt,
-          studentId: matchReactions.studentId,
-        })
-        .from(matchReactions)
-        .where(eq(matchReactions.matchId, id))
-        .orderBy(asc(matchReactions.createdAt)),
+      db.select({ id: matchReactions.id, emoji: matchReactions.emoji, matchMinute: matchReactions.matchMinute, createdAt: matchReactions.createdAt, studentId: matchReactions.studentId })
+        .from(matchReactions).where(eq(matchReactions.matchId, id)).orderBy(asc(matchReactions.createdAt)),
+      // Fetch current user’s prediction for this match
+      session?.user?.id
+        ? db.select().from(predictions).where(and(eq(predictions.studentId, session.user.id), eq(predictions.matchId, id))).limit(1)
+        : Promise.resolve([]),
     ]);
 
   const teamMap = new Map(fetchedTeams.map((t) => [t.id, t]));
@@ -68,7 +49,6 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   const team2 = match.team2Id ? teamMap.get(match.team2Id) ?? null : null;
 
   const venueMap = new Map(allVenues.map((v) => [v.id, v]));
-
   const venueCounts: Record<string, { name: string; area: string | null; mapsUrl: string | null; url: string | null; count: number; people: string[] }> = {};
   for (const inv of rawInvites) {
     const key = inv.venueId ?? inv.locationName ?? "Unknown";
@@ -80,15 +60,11 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   }
   const venueBreakdown = Object.values(venueCounts).sort((a, b) => b.count - a.count);
 
-  // Only fetch students who actually authored a reaction — no full table scan
   const reactorIds = [...new Set(reactions.map((r) => r.studentId))];
-  const reactionStudents =
-    reactorIds.length > 0
-      ? await db
-          .select({ id: students.id, name: students.name })
-          .from(students)
-          .where(and(inArray(students.id, reactorIds), eq(students.flagged, false)))
-      : [];
+  const reactionStudents = reactorIds.length > 0
+    ? await db.select({ id: students.id, name: students.name }).from(students)
+        .where(and(inArray(students.id, reactorIds), eq(students.flagged, false)))
+    : [];
   const studentNameMap = new Map(reactionStudents.map((s) => [s.id, s.name]));
   const enrichedReactions = reactions.map((r) => ({
     ...r,
@@ -97,13 +73,18 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
 
   const isLive = match.status === "live";
   const isCompleted = match.status === "completed";
+  const isUpcoming = match.status === "upcoming";
   const t1Name = team1?.name ?? match.team1Placeholder ?? "TBD";
   const t2Name = team2?.name ?? match.team2Placeholder ?? "TBD";
+
+  const existingPrediction = myPrediction[0] ?? null;
+  const canPredict = !!session?.user?.id && isUpcoming && !!team1 && !!team2;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">← Back</Link>
 
+      {/* Match header */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs text-gray-400">{stageLabel(match.stage)}{match.groupName && ` · Group ${match.groupName}`}</span>
@@ -138,6 +119,31 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
         </div>
       </div>
 
+      {/* Prediction card — shown for all logged-in users on upcoming matches */}
+      {canPredict && (
+        <div className="rounded-2xl border border-green-100 bg-green-50 p-4 shadow-sm">
+          <p className="text-sm font-semibold text-green-800 mb-3">
+            🏆 {existingPrediction ? "Your prediction (tap to update)" : "Predict the score — earn tokens!"}
+          </p>
+          <PredictionForm
+            matchId={id}
+            team1={team1}
+            team2={team2}
+            existing={existingPrediction ? { predictedScore1: existingPrediction.predictedScore1, predictedScore2: existingPrediction.predictedScore2 } : null}
+            locked={false}
+          />
+          <p className="text-xs text-green-700 mt-2">
+            Exact score → +15 tokens · Correct result → +5 tokens
+          </p>
+        </div>
+      )}
+      {!session?.user?.id && isUpcoming && team1 && team2 && (
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 text-center text-sm text-gray-500">
+          <Link href="/join" className="text-green-600 font-medium hover:underline">Join the class</Link> to predict scores and earn tokens
+        </div>
+      )}
+
+      {/* Where people are watching */}
       <section>
         <h2 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
           <MapPin className="h-4 w-4 text-green-500" /> Where people are watching
@@ -175,6 +181,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
         )}
       </section>
 
+      {/* Reactions */}
       <section>
         <h2 className="text-base font-semibold text-gray-900 mb-3">{isLive ? "🔴 Live reactions" : "Reactions"}</h2>
         {session ? (
