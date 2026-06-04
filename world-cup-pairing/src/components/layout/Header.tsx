@@ -2,14 +2,33 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { useEffect, useState, useCallback } from "react";
 import { Trophy, Coins } from "lucide-react";
-import { useLiveProfile } from "@/hooks/useLiveProfile";
 
 export default function Header() {
   const { data: session } = useSession();
-  const profile = useLiveProfile();
 
-  const displayTokens = profile?.tokenBalance ?? session?.user?.tokenBalance ?? 0;
+  // Seed from JWT so we never flash 0 — overwritten immediately by live fetch
+  const [liveTokens, setLiveTokens] = useState<number | null>(
+    session?.user?.tokenBalance ?? null
+  );
+
+  const fetchTokens = useCallback(() => {
+    if (!session?.user?.id) { setLiveTokens(null); return; }
+    fetch("/api/students/me")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.tokenBalance != null) setLiveTokens(d.tokenBalance); })
+      .catch(() => {});
+  }, [session?.user?.id]);
+
+  useEffect(() => { fetchTokens(); }, [fetchTokens]);
+
+  useEffect(() => {
+    window.addEventListener("token-refresh", fetchTokens);
+    return () => window.removeEventListener("token-refresh", fetchTokens);
+  }, [fetchTokens]);
+
+  const displayTokens = liveTokens ?? session?.user?.tokenBalance ?? 0;
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-sm">

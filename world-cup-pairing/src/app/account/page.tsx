@@ -5,35 +5,38 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import VisibilitySelector from "@/components/profile/VisibilitySelector";
-import { useLiveProfile } from "@/hooks/useLiveProfile";
 
 type Visibility = "public" | "friends" | "stealth";
 
 export default function AccountPage() {
   const { data: session, update } = useSession();
   const router = useRouter();
-  const profile = useLiveProfile();
 
-  // Seed visibility from live profile, fall back to session JWT
+  const [liveTokens, setLiveTokens] = useState<number | null>(null);
   const [visibility, setVisibility] = useState<Visibility>(
-    (profile?.visibility ?? session?.user?.visibility ?? "public") as Visibility
+    (session?.user?.visibility ?? "public") as Visibility
   );
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Update visibility selector when live profile loads
+  // Fetch live tokenBalance + visibility directly from DB on mount
   useEffect(() => {
-    if (profile?.visibility) {
-      setVisibility(profile.visibility as Visibility);
-    }
-  }, [profile?.visibility]);
+    if (!session?.user?.id) return;
+    fetch("/api/students/me")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d?.tokenBalance != null) setLiveTokens(d.tokenBalance);
+        if (d?.visibility) setVisibility(d.visibility as Visibility);
+      })
+      .catch(() => {});
+  }, [session?.user?.id]);
 
   if (!session) {
     router.push("/join");
     return null;
   }
 
-  const displayTokens = profile?.tokenBalance ?? session.user.tokenBalance ?? 0;
+  const displayTokens = liveTokens ?? session.user.tokenBalance ?? 0;
 
   const handleSave = async () => {
     setLoading(true);
@@ -45,8 +48,6 @@ export default function AccountPage() {
       });
       if (res.ok) {
         await update({ visibility });
-        // Fire token-refresh so useLiveProfile re-fetches
-        window.dispatchEvent(new Event("token-refresh"));
         setSaved(true);
       }
     } finally {
