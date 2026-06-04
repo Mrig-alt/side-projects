@@ -20,11 +20,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const { email, pin } = credentials as { email: string; pin?: string };
         if (!email) return null;
 
-        // PIN check: if JOIN_PIN is set AND a pin was supplied, verify it.
-        // If JOIN_PIN is not set, skip the check entirely (open access).
-        // This lets you disable the gate by removing JOIN_PIN from env.
+        // PIN check: if JOIN_PIN is set, the supplied pin MUST match.
+        // An empty/missing pin is also rejected — no bypass allowed.
         const joinPin = process.env.JOIN_PIN;
-        if (joinPin && pin && pin !== joinPin) return null;
+        if (joinPin && pin !== joinPin) return null;
 
         const [student] = await db
           .select()

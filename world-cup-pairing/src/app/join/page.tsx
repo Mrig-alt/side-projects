@@ -29,12 +29,11 @@ function formatError(error: unknown): string {
     const msgs = Object.entries(error)
       .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs[0] : msgs}`)
       .join(", ");
-    return msgs || "Registration failed — please check your details";
+    return msgs || "Registration failed \u2014 please check your details";
   }
   return "Registration failed";
 }
 
-// Inner component uses useSearchParams — must be inside <Suspense>
 function JoinPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -108,7 +107,7 @@ function JoinPageInner() {
     if (result?.ok) {
       router.push(next);
     } else {
-      setError(pinRequired ? "Wrong PIN — ask whoever set up the app for the class PIN." : "Sign in failed — please try again.");
+      setError("Wrong PIN \u2014 ask whoever set up the app for the class PIN.");
     }
   };
 
@@ -137,9 +136,9 @@ function JoinPageInner() {
         redirect: false,
       });
       if (result?.ok) router.push(next);
-      else setError("Registered! But auto-login failed — try signing in again.");
+      else setError("Registered! But auto-login failed \u2014 try signing in again.");
     } catch {
-      setError("Network error — please try again");
+      setError("Network error \u2014 please try again");
     } finally {
       setLoading(false);
     }
@@ -151,7 +150,7 @@ function JoinPageInner() {
         <Trophy className="mx-auto h-10 w-10 text-green-600" />
         <h1 className="mt-2 text-2xl font-bold text-gray-900">IE World Cup 2026</h1>
         {studentCount !== null && (
-          <p className="mt-1 text-sm text-gray-500">🌍 {studentCount} classmates already joined</p>
+          <p className="mt-1 text-sm text-gray-500">\uD83C\uDF0D {studentCount} classmates already joined</p>
         )}
       </div>
 
@@ -177,47 +176,45 @@ function JoinPageInner() {
           </div>
         </div>
 
-        {/* RETURNING USER */}
+        {/* RETURNING USER — always require PIN */}
         {mode === "returning" && (
           <div className="space-y-4">
             <div className="rounded-lg bg-green-50 px-4 py-3">
               <p className="text-sm font-medium text-green-800">
-                👋 Welcome back{firstName ? `, ${firstName}` : ""}!
-                {pinRequired ? " Enter the class PIN to continue." : " Click below to sign in."}
+                \uD83D\uDC4B Welcome back{firstName ? `, ${firstName}` : ""}! Enter the class PIN to continue.
               </p>
             </div>
-            {pinRequired && (
-              <div className="grid gap-1.5">
-                <Label htmlFor="pin-return">Class PIN</Label>
-                <Input
-                  id="pin-return"
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="Enter class PIN"
-                  autoComplete="current-password"
-                  onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
-                />
-              </div>
-            )}
+            <div className="grid gap-1.5">
+              <Label htmlFor="pin-return">Class PIN</Label>
+              <Input
+                id="pin-return"
+                type="password"
+                value={pin}
+                onChange={(e) => { setPin(e.target.value); setError(""); }}
+                placeholder="Enter class PIN"
+                autoComplete="current-password"
+                onKeyDown={(e) => e.key === "Enter" && pin.trim() && handleSignIn()}
+              />
+            </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
-            <Button className="w-full" disabled={loading} onClick={handleSignIn}>
-              {loading ? "Signing in..." : "Sign in →"}
+            {/* Disabled until PIN is entered */}
+            <Button className="w-full" disabled={loading || !pin.trim()} onClick={handleSignIn}>
+              {loading ? "Signing in..." : "Sign in \u2192"}
             </Button>
           </div>
         )}
 
-        {/* NEW USER — step 1 */}
+        {/* NEW USER \u2014 step 1 */}
         {mode === "new" && step === "identity" && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-500">New here — let&apos;s get you set up 🎉</p>
+            <p className="text-sm text-gray-500">New here \u2014 let&apos;s get you set up \uD83C\uDF89</p>
             <div className="grid gap-1.5">
               <Label htmlFor="name">Full name *</Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="María García"
+                placeholder="Mar\uED\uB0\uAC Garc\uED\uB0\uADa"
               />
             </div>
             <div className="grid gap-1.5">
@@ -247,31 +244,31 @@ function JoinPageInner() {
               disabled={!name.trim() || (pinRequired && !pin.trim())}
               onClick={() => setStep("team")}
             >
-              Continue → Pick your team
+              Continue \u2192 Pick your team
             </Button>
           </div>
         )}
       </div>
 
-      {/* NEW USER — step 2: pick team */}
+      {/* NEW USER \u2014 step 2: pick team */}
       {mode === "new" && step === "team" && (
         <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-gray-900">Pick your team</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Optional — you can skip and set it later</p>
+              <p className="text-xs text-gray-400 mt-0.5">Optional \u2014 you can skip and set it later</p>
             </div>
             {selectedTeam && (
               <span className="flex items-center gap-1 text-sm font-medium text-green-700">
                 {selectedTeam.flagEmoji} {selectedTeam.name}
-                {isHonoraryFan && <span className="text-xs text-blue-500 ml-1">🤝 Honorary</span>}
+                {isHonoraryFan && <span className="text-xs text-blue-500 ml-1">\uD83E\uDD1D Honorary</span>}
               </span>
             )}
           </div>
           <TeamGrid teams={teams} selectedTeamId={teamId} onSelect={setTeamId} />
           <div className="flex flex-col gap-2 mt-2">
             <Button className="w-full" onClick={() => setStep("visibility")}>
-              {teamId ? "Continue →" : "Continue without a team →"}
+              {teamId ? "Continue \u2192" : "Continue without a team \u2192"}
             </Button>
             {teamId && (
               <button
@@ -286,25 +283,25 @@ function JoinPageInner() {
         </div>
       )}
 
-      {/* NEW USER — step 3: privacy */}
+      {/* NEW USER \u2014 step 3: privacy */}
       {mode === "new" && step === "visibility" && (
         <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
           <h2 className="font-semibold text-gray-900">Privacy mode</h2>
           <VisibilitySelector value={visibility} onChange={setVisibility} />
           <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            You&apos;ll start with <span className="font-bold text-gray-900">🪙 {tokenPreview} tokens</span>
-            {visibility === "public" && <span className="text-yellow-600"> (includes +50 public bonus 🎉)</span>}
+            You&apos;ll start with <span className="font-bold text-gray-900">\uD83E\uDE99 {tokenPreview} tokens</span>
+            {visibility === "public" && <span className="text-yellow-600"> (includes +50 public bonus \uD83C\uDF89)</span>}
           </div>
           {error && <p className="text-sm text-red-500">{error}</p>}
           <Button className="w-full" onClick={handleRegister} disabled={loading}>
-            {loading ? "Joining..." : "Join the game 🏆"}
+            {loading ? "Joining..." : "Join the game \uD83C\uDFC6"}
           </Button>
           <button
             type="button"
             className="w-full text-sm text-gray-400 hover:text-gray-600"
             onClick={() => setStep("team")}
           >
-            ← Back
+            \u2190 Back
           </button>
         </div>
       )}
@@ -312,7 +309,6 @@ function JoinPageInner() {
   );
 }
 
-// Suspense wrapper required by Next.js when useSearchParams is used at the page level
 export default function JoinPage() {
   return (
     <Suspense fallback={
