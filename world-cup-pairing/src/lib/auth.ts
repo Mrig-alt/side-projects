@@ -61,11 +61,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               tokenBalance: students.tokenBalance,
               teamId: students.teamId,
               visibility: students.visibility,
+              flagged: students.flagged,
             })
             .from(students)
             .where(eq(students.id, token.id as string))
             .limit(1);
           if (fresh) {
+            if (fresh.flagged) return null; // invalidate JWT immediately when user is banned
             token.tokenBalance = fresh.tokenBalance;
             token.teamId = fresh.teamId;
             token.visibility = fresh.visibility;

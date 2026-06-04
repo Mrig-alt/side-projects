@@ -25,14 +25,15 @@ export async function GET() {
     .leftJoin(teams, eq(students.teamId, teams.id))
     .orderBy(desc(students.createdAt));
 
+  const sanitize = (v: string) => (/^[=+\-@]/.test(v) ? `'${v}` : v);
   const header = ["id", "name", "email", "nationality", "team", "tokenBalance", "visibility", "flagged", "createdAt"].join(",");
   const csvRows = rows.map((r) =>
     [
       r.id,
-      `"${(r.name ?? "").replace(/"/g, '""')}"`,
-      `"${(r.email ?? "").replace(/"/g, '""')}"`,
-      `"${(r.nationality ?? "").replace(/"/g, '""')}"`,
-      `"${(r.teamName ?? "").replace(/"/g, '""')}"`,
+      `"${sanitize((r.name ?? "").replace(/"/g, '""'))}"`,
+      `"${sanitize((r.email ?? "").replace(/"/g, '""'))}"`,
+      `"${sanitize((r.nationality ?? "").replace(/"/g, '""'))}"`,
+      `"${sanitize((r.teamName ?? "").replace(/"/g, '""'))}"`,
       r.tokenBalance,
       r.visibility,
       r.flagged,

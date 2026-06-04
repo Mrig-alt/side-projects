@@ -8,6 +8,7 @@ import {
   integer,
   timestamp,
   unique,
+  index,
   decimal,
 } from "drizzle-orm/pg-core";
 
@@ -82,17 +83,25 @@ export const students = pgTable("students", {
 
 // ─── Connections ──────────────────────────────────────────────────────────────
 
-export const connections = pgTable("connections", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  requesterId: uuid("requester_id")
-    .notNull()
-    .references(() => students.id, { onDelete: "cascade" }),
-  requesteeId: uuid("requestee_id")
-    .notNull()
-    .references(() => students.id, { onDelete: "cascade" }),
-  status: connectionStatusEnum("status").notNull().default("pending"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const connections = pgTable(
+  "connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    requesterId: uuid("requester_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    requesteeId: uuid("requestee_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    status: connectionStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    unique().on(t.requesterId, t.requesteeId),
+    index("connections_requester_idx").on(t.requesterId),
+    index("connections_requestee_idx").on(t.requesteeId),
+  ]
+);
 
 // ─── Friend Groups ────────────────────────────────────────────────────────────
 
@@ -172,41 +181,56 @@ export const predictions = pgTable(
     tokensEarned: integer("tokens_earned"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [unique().on(t.studentId, t.matchId)]
+  (t) => [
+    unique().on(t.studentId, t.matchId),
+    index("predictions_match_idx").on(t.matchId),
+    index("predictions_student_idx").on(t.studentId),
+  ]
 );
 
 // ─── Token Bets ───────────────────────────────────────────────────────────────
 
-export const bets = pgTable("bets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  matchId: uuid("match_id")
-    .notNull()
-    .references(() => matches.id, { onDelete: "cascade" }),
-  student1Id: uuid("student1_id")
-    .notNull()
-    .references(() => students.id, { onDelete: "cascade" }),
-  student2Id: uuid("student2_id")
-    .notNull()
-    .references(() => students.id, { onDelete: "cascade" }),
-  stakeTokens: integer("stake_tokens").notNull().default(10),
-  winnerId: uuid("winner_id").references(() => students.id),
-  settled: boolean("settled").notNull().default(false),
-});
+export const bets = pgTable(
+  "bets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    matchId: uuid("match_id")
+      .notNull()
+      .references(() => matches.id, { onDelete: "cascade" }),
+    student1Id: uuid("student1_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    student2Id: uuid("student2_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    stakeTokens: integer("stake_tokens").notNull().default(10),
+    winnerId: uuid("winner_id").references(() => students.id),
+    settled: boolean("settled").notNull().default(false),
+  },
+  (t) => [
+    unique().on(t.matchId, t.student1Id, t.student2Id),
+    index("bets_match_idx").on(t.matchId),
+  ]
+);
 
 // ─── Match Reactions ──────────────────────────────────────────────────────────
 
-export const matchReactions = pgTable("match_reactions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  studentId: uuid("student_id")
-    .notNull()
-    .references(() => students.id, { onDelete: "cascade" }),
-  matchId: uuid("match_id")
-    .notNull()
-    .references(() => matches.id, { onDelete: "cascade" }),
-  emoji: varchar("emoji", { length: 10 }).notNull(),
-  matchMinute: integer("match_minute"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const matchReactions = pgTable(
+  "match_reactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    matchId: uuid("match_id")
+      .notNull()
+      .references(() => matches.id, { onDelete: "cascade" }),
+    emoji: varchar("emoji", { length: 10 }).notNull(),
+    matchMinute: integer("match_minute"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("match_reactions_match_idx").on(t.matchId, t.createdAt)]
+);
 
 // ─── Post-Match Vibes ─────────────────────────────────────────────────────────
 
@@ -228,25 +252,30 @@ export const matchVibes = pgTable(
 
 // ─── Watch Invites ────────────────────────────────────────────────────────────
 
-export const watchInvites = pgTable("watch_invites", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  inviterId: uuid("inviter_id")
-    .notNull()
-    .references(() => students.id, { onDelete: "cascade" }),
-  matchId: uuid("match_id")
-    .notNull()
-    .references(() => matches.id, { onDelete: "cascade" }),
-  venueId: uuid("venue_id").references(() => venues.id, { onDelete: "set null" }),
-  locationName: varchar("location_name", { length: 200 }),
-  locationUrl: varchar("location_url", { length: 500 }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const watchInvites = pgTable(
+  "watch_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    inviterId: uuid("inviter_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    matchId: uuid("match_id")
+      .notNull()
+      .references(() => matches.id, { onDelete: "cascade" }),
+    venueId: uuid("venue_id").references(() => venues.id, { onDelete: "set null" }),
+    locationName: varchar("location_name", { length: 200 }),
+    locationUrl: varchar("location_url", { length: 500 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.inviterId, t.matchId)]
+);
 
 // ─── Live Reports ─────────────────────────────────────────────────────────────
 
 export const liveReports = pgTable("live_reports", {
   id: uuid("id").primaryKey().defaultRandom(),
   studentId: uuid("student_id")
+    .notNull()
     .references(() => students.id, { onDelete: "cascade" }),
   venueId: uuid("venue_id")
     .references(() => venues.id, { onDelete: "set null" }),

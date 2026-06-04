@@ -10,20 +10,22 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   const { id: groupId } = await params;
 
-  await db
-    .delete(groupMembers)
-    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.studentId, session.user.id)));
+  await db.transaction(async (tx) => {
+    // Read ownership BEFORE deleting membership so we don't lose the check if process crashes
+    const [group] = await tx
+      .select({ createdBy: friendGroups.createdBy })
+      .from(friendGroups)
+      .where(eq(friendGroups.id, groupId))
+      .limit(1);
 
-  // If owner leaving, delete the whole group
-  const [group] = await db
-    .select({ createdBy: friendGroups.createdBy })
-    .from(friendGroups)
-    .where(eq(friendGroups.id, groupId))
-    .limit(1);
+    await tx
+      .delete(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.studentId, session.user.id)));
 
-  if (group?.createdBy === session.user.id) {
-    await db.delete(friendGroups).where(eq(friendGroups.id, groupId));
-  }
+    if (group?.createdBy === session.user.id) {
+      await tx.delete(friendGroups).where(eq(friendGroups.id, groupId));
+    }
+  });
 
   return NextResponse.json({ ok: true });
 }

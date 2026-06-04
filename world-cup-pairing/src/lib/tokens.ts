@@ -27,10 +27,15 @@ export async function settleBetsForMatch(matchId: string) {
       winnerId = bet.student2Id;
     }
 
-    await db.update(bets).set({ settled: true, winnerId }).where(eq(bets.id, bet.id));
+    // CAS guard: only update if still unsettled — prevents double-credit on concurrent syncs
+    const updated = await db
+      .update(bets)
+      .set({ settled: true, winnerId })
+      .where(and(eq(bets.id, bet.id), eq(bets.settled, false)))
+      .returning({ id: bets.id });
+    if (updated.length === 0) continue; // already settled by a concurrent request
 
     if (winnerId) {
-      // FIX: use parameterised sql`` expression — no raw string interpolation
       await db
         .update(students)
         .set({ tokenBalance: sql`${students.tokenBalance} + ${bet.stakeTokens * 2}` })
@@ -70,10 +75,15 @@ export async function settlePredictionsForMatch(matchId: string) {
     if (pred.predictedScore1 === match.team1Score && pred.predictedScore2 === match.team2Score)
       earned += PREDICTION_EXACT_TOKENS - PREDICTION_CORRECT_TOKENS;
 
-    await db.update(predictions).set({ tokensEarned: earned }).where(eq(predictions.id, pred.id));
+    // CAS guard: only update if tokensEarned is still null — prevents double-credit on concurrent syncs
+    const updated = await db
+      .update(predictions)
+      .set({ tokensEarned: earned })
+      .where(and(eq(predictions.id, pred.id), isNull(predictions.tokensEarned)))
+      .returning({ id: predictions.id });
+    if (updated.length === 0) continue; // already settled by a concurrent request
 
     if (earned > 0) {
-      // FIX: parameterised update
       await db
         .update(students)
         .set({ tokenBalance: sql`${students.tokenBalance} + ${earned}` })

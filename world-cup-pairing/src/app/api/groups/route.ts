@@ -66,24 +66,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
   }
 
-  // Generate unique invite code (retry if clash)
-  let inviteCode = generateCode();
-  let attempts = 0;
-  while (attempts < 5) {
-    const existing = await db
-      .select({ id: friendGroups.id })
-      .from(friendGroups)
-      .where(eq(friendGroups.inviteCode, inviteCode))
-      .limit(1);
-    if (existing.length === 0) break;
-    inviteCode = generateCode();
-    attempts++;
+  // Generate a unique invite code; catch the DB unique constraint violation instead of
+  // the manual retry loop (which could silently fail after 5 collisions)
+  let group: typeof friendGroups.$inferSelect;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const inviteCode = generateCode();
+    try {
+      const [created] = await db
+        .insert(friendGroups)
+        .values({ name: parsed.data.name, inviteCode, createdBy: session.user.id })
+        .returning();
+      group = created;
+      break;
+    } catch (e: unknown) {
+      // Postgres unique constraint violation (23505) — retry with a new code
+      if ((e as { code?: string }).code === "23505") continue;
+      throw e;
+    }
   }
-
-  const [group] = await db
-    .insert(friendGroups)
-    .values({ name: parsed.data.name, inviteCode, createdBy: session.user.id })
-    .returning();
+  if (!group!) return NextResponse.json({ error: "Could not generate invite code, try again" }, { status: 500 });
 
   // Auto-add creator as member
   await db.insert(groupMembers).values({ groupId: group.id, studentId: session.user.id });

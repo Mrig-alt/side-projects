@@ -19,24 +19,54 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   const [match] = await db.select().from(matches).where(eq(matches.id, id)).limit(1);
   if (!match) notFound();
 
-  const team1 = match.team1Id ? (await db.select().from(teams).where(eq(teams.id, match.team1Id)).limit(1))[0] : null;
-  const team2 = match.team2Id ? (await db.select().from(teams).where(eq(teams.id, match.team2Id)).limit(1))[0] : null;
+  const teamIds = [match.team1Id, match.team2Id].filter(Boolean) as string[];
 
-  const team1Supporters = match.team1Id
-    ? await db.select({ id: students.id, name: students.name }).from(students).where(and(eq(students.teamId, match.team1Id), eq(students.flagged, false)))
-    : [];
-  const team2Supporters = match.team2Id
-    ? await db.select({ id: students.id, name: students.name }).from(students).where(and(eq(students.teamId, match.team2Id), eq(students.flagged, false)))
-    : [];
+  // Parallelize all independent queries — collapses 7+ sequential round-trips into 2
+  const [fetchedTeams, team1Supporters, team2Supporters, rawInvites, allVenues, reactions] =
+    await Promise.all([
+      teamIds.length > 0 ? db.select().from(teams).where(inArray(teams.id, teamIds)) : Promise.resolve([]),
+      match.team1Id
+        ? db
+            .select({ id: students.id, name: students.name })
+            .from(students)
+            .where(and(eq(students.teamId, match.team1Id), eq(students.flagged, false), eq(students.visibility, "public")))
+        : Promise.resolve([]),
+      match.team2Id
+        ? db
+            .select({ id: students.id, name: students.name })
+            .from(students)
+            .where(and(eq(students.teamId, match.team2Id), eq(students.flagged, false), eq(students.visibility, "public")))
+        : Promise.resolve([]),
+      db
+        .select({
+          id: watchInvites.id,
+          inviterId: watchInvites.inviterId,
+          venueId: watchInvites.venueId,
+          locationName: watchInvites.locationName,
+          locationUrl: watchInvites.locationUrl,
+          inviterName: students.name,
+        })
+        .from(watchInvites)
+        .innerJoin(students, eq(students.id, watchInvites.inviterId))
+        .where(eq(watchInvites.matchId, id)),
+      db.select({ id: venues.id, name: venues.name, area: venues.area, mapsUrl: venues.mapsUrl }).from(venues),
+      db
+        .select({
+          id: matchReactions.id,
+          emoji: matchReactions.emoji,
+          matchMinute: matchReactions.matchMinute,
+          createdAt: matchReactions.createdAt,
+          studentId: matchReactions.studentId,
+        })
+        .from(matchReactions)
+        .where(eq(matchReactions.matchId, id))
+        .orderBy(asc(matchReactions.createdAt)),
+    ]);
 
-  // Watch plans
-  const rawInvites = await db
-    .select({ id: watchInvites.id, inviterId: watchInvites.inviterId, venueId: watchInvites.venueId, locationName: watchInvites.locationName, locationUrl: watchInvites.locationUrl, inviterName: students.name })
-    .from(watchInvites)
-    .innerJoin(students, eq(students.id, watchInvites.inviterId))
-    .where(eq(watchInvites.matchId, id));
+  const teamMap = new Map(fetchedTeams.map((t) => [t.id, t]));
+  const team1 = match.team1Id ? teamMap.get(match.team1Id) ?? null : null;
+  const team2 = match.team2Id ? teamMap.get(match.team2Id) ?? null : null;
 
-  const allVenues = await db.select({ id: venues.id, name: venues.name, area: venues.area, mapsUrl: venues.mapsUrl }).from(venues);
   const venueMap = new Map(allVenues.map((v) => [v.id, v]));
 
   const venueCounts: Record<string, { name: string; area: string | null; mapsUrl: string | null; url: string | null; count: number; people: string[] }> = {};
@@ -50,14 +80,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   }
   const venueBreakdown = Object.values(venueCounts).sort((a, b) => b.count - a.count);
 
-  // Reactions
-  const reactions = await db
-    .select({ id: matchReactions.id, emoji: matchReactions.emoji, matchMinute: matchReactions.matchMinute, createdAt: matchReactions.createdAt, studentId: matchReactions.studentId })
-    .from(matchReactions)
-    .where(eq(matchReactions.matchId, id))
-    .orderBy(asc(matchReactions.createdAt));
-
-  // FIX: only fetch students who actually authored a reaction — no full table scan
+  // Only fetch students who actually authored a reaction — no full table scan
   const reactorIds = [...new Set(reactions.map((r) => r.studentId))];
   const reactionStudents =
     reactorIds.length > 0
@@ -98,7 +121,11 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
             </div>
           </div>
           <div className="flex flex-col items-center shrink-0">
-            {isCompleted || isLive ? <span className="text-3xl font-bold">{match.team1Score ?? 0}–{match.team2Score ?? 0}</span> : <span className="text-xl text-gray-400">vs</span>}
+            {isCompleted || isLive ? (
+              match.team1Score !== null && match.team2Score !== null
+                ? <span className="text-3xl font-bold">{match.team1Score}–{match.team2Score}</span>
+                : <span className="text-xl text-gray-400">Live</span>
+            ) : <span className="text-xl text-gray-400">vs</span>}
             {match.city && <span className="text-xs text-gray-400 mt-1">{match.city}</span>}
           </div>
           <div className="flex flex-col items-center gap-1 flex-1">

@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { watchInvites, venues, matches, teams, students } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and, or } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import WatchMapClient from "@/components/watchmap/WatchMapClient";
 
@@ -9,9 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function WatchMapPage() {
   const session = await auth();
 
-  // FIX #9: filter out flagged inviters at the DB level so their watch plans
-  // don't appear on the public watchmap. Previously this was an unscoped full
-  // table scan that returned every row regardless of flagged status.
+  // Scope to upcoming/live matches only and filter flagged inviters — prevents full table scan
   const allInvites = await db
     .select({
       id: watchInvites.id,
@@ -24,7 +22,8 @@ export default async function WatchMapPage() {
     })
     .from(watchInvites)
     .innerJoin(students, eq(students.id, watchInvites.inviterId))
-    .where(eq(students.flagged, false));
+    .innerJoin(matches, eq(matches.id, watchInvites.matchId))
+    .where(and(eq(students.flagged, false), or(eq(matches.status, "upcoming"), eq(matches.status, "live"))));
 
   const allMatches = await db
     .select({

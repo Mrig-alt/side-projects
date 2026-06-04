@@ -9,9 +9,10 @@ function isAdmin(email: string | undefined) {
   return !!adminEmail && email === adminEmail;
 }
 
-// FIX #10: GET now uses session auth (same ADMIN_EMAIL gate as the page +
-// /api/admin/moderate) instead of a Bearer token that leaks in server logs.
-// The old PATCH is removed — moderation lives at /api/admin/moderate instead.
+function sanitizeCsvCell(value: string): string {
+  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
 export async function GET(req: Request) {
   const session = await auth();
   if (!isAdmin(session?.user?.email)) {
@@ -42,10 +43,21 @@ export async function GET(req: Request) {
     const csv =
       header +
       rows
-        .map(
-          (r) =>
-            `"${r.id}","${r.name}","${r.email}","${r.nationality ?? ""}","${r.teamName ?? ""}","${r.visibility}",${r.tokenBalance},${r.isHonoraryFan},${r.flagged},"${r.createdAt.toISOString()}"`
-        )
+        .map((r) => {
+          const cells = [
+            r.id,
+            sanitizeCsvCell((r.name ?? "").replace(/"/g, '""')),
+            sanitizeCsvCell((r.email ?? "").replace(/"/g, '""')),
+            sanitizeCsvCell((r.nationality ?? "").replace(/"/g, '""')),
+            sanitizeCsvCell((r.teamName ?? "").replace(/"/g, '""')),
+            r.visibility,
+            r.tokenBalance,
+            r.isHonoraryFan,
+            r.flagged,
+            r.createdAt.toISOString(),
+          ];
+          return cells.map((c, i) => (i < 5 ? `"${c}"` : c)).join(",");
+        })
         .join("\n");
     return new Response(csv, {
       headers: {

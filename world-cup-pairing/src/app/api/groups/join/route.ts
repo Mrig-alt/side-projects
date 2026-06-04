@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { friendGroups, groupMembers } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 const joinSchema = z.object({
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   const existing = await db
     .select({ id: groupMembers.id })
     .from(groupMembers)
-    .where(eq(groupMembers.groupId, group.id))
+    .where(and(eq(groupMembers.groupId, group.id), eq(groupMembers.studentId, session.user.id)))
     .limit(1);
 
   if (existing.length > 0) {

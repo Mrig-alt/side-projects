@@ -7,7 +7,16 @@ import { settleBetsForMatch, settlePredictionsForMatch } from "@/lib/tokens";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Require a CRON_SECRET bearer token to prevent unauthenticated triggering
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = req.headers.get("authorization");
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
   if (!process.env.FOOTBALL_DATA_API_KEY) {
     return NextResponse.json({ error: "API key not configured" }, { status: 503 });
   }
@@ -29,7 +38,7 @@ export async function GET() {
     const score1 = am.score.fullTime.home;
     const score2 = am.score.fullTime.away;
 
-    // FIX: only transition to completed when scores are non-null.
+    // Only transition to completed when scores are non-null.
     // If the API emits FINISHED with null scores, treat as live so we retry on next sync.
     const resolvedStatus =
       newStatus === "completed" && (score1 === null || score2 === null) ? "live" : newStatus;
@@ -42,7 +51,7 @@ export async function GET() {
 
     if (existingByExtId) {
       const wasCompleted = existingByExtId.status === "completed";
-      // FIX: if scores just became non-null on a previously completed match, re-settle
+      // If scores just became non-null on a previously completed match, re-settle
       const scoresNowAvailable =
         wasCompleted &&
         (existingByExtId.team1Score === null || existingByExtId.team2Score === null) &&
