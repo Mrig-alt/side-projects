@@ -1,0 +1,152 @@
+import { db } from "@/db";
+import { watchInvites, venues, matches, teams, students } from "@/db/schema";
+import { eq, asc } from "drizzle-orm";
+import { auth } from "@/lib/auth";
+import WatchMapClient from "@/components/watchmap/WatchMapClient";
+
+export const dynamic = "force-dynamic";
+
+export default async function WatchMapPage() {
+  const session = await auth();
+
+  // All invites with student name and venue info
+  const allInvites = await db
+    .select({
+      id: watchInvites.id,
+      matchId: watchInvites.matchId,
+      inviterId: watchInvites.inviterId,
+      venueId: watchInvites.venueId,
+      locationName: watchInvites.locationName,
+      locationUrl: watchInvites.locationUrl,
+      inviterName: students.name,
+    })
+    .from(watchInvites)
+    .innerJoin(students, eq(students.id, watchInvites.inviterId));
+
+  const allMatches = await db
+    .select({
+      id: matches.id,
+      matchDatetime: matches.matchDatetime,
+      stage: matches.stage,
+      groupName: matches.groupName,
+      team1Id: matches.team1Id,
+      team2Id: matches.team2Id,
+      team1Placeholder: matches.team1Placeholder,
+      team2Placeholder: matches.team2Placeholder,
+      status: matches.status,
+    })
+    .from(matches)
+    .orderBy(asc(matches.matchDatetime));
+
+  const allTeams = await db.select({ id: teams.id, name: teams.name, flagEmoji: teams.flagEmoji }).from(teams);
+  const teamMap = new Map(allTeams.map((t) => [t.id, t]));
+
+  const allVenues = await db.select().from(venues);
+  const venueMap = new Map(allVenues.map((v) => [v.id, v]));
+
+  // ── Build hottest matches ─────────────────────────────────────────────────
+  // Group invites by matchId
+  const invitesByMatch = new Map<string, typeof allInvites>();
+  for (const inv of allInvites) {
+    if (!invitesByMatch.has(inv.matchId)) invitesByMatch.set(inv.matchId, []);
+    invitesByMatch.get(inv.matchId)!.push(inv);
+  }
+
+  const hottestMatches = allMatches
+    .filter((m) => (invitesByMatch.get(m.id)?.length ?? 0) > 0)
+    .map((m) => {
+      const invites = invitesByMatch.get(m.id) ?? [];
+      const t1 = m.team1Id ? teamMap.get(m.team1Id) : null;
+      const t2 = m.team2Id ? teamMap.get(m.team2Id) : null;
+
+      // Group by venue within this match
+      const venueCounts: Record<string, { name: string; url: string | null; mapsUrl: string | null; count: number; people: string[] }> = {};
+      for (const inv of invites) {
+        const key = inv.venueId ?? inv.locationName ?? "Unknown";
+        const venueName = inv.venueId && venueMap.has(inv.venueId)
+          ? venueMap.get(inv.venueId)!.name
+          : inv.locationName ?? "Unknown";
+        const mapsUrl = inv.venueId && venueMap.has(inv.venueId)
+          ? venueMap.get(inv.venueId)!.mapsUrl
+          : null;
+        if (!venueCounts[key]) venueCounts[key] = { name: venueName, url: inv.locationUrl, mapsUrl, count: 0, people: [] };
+        venueCounts[key].count++;
+        venueCounts[key].people.push(inv.inviterName);
+      }
+
+      const venueBreakdown = Object.values(venueCounts).sort((a, b) => b.count - a.count);
+
+      return {
+        matchId: m.id,
+        matchDatetime: m.matchDatetime.toISOString(),
+        stage: m.stage,
+        groupName: m.groupName,
+        status: m.status,
+        team1Name: t1?.name ?? m.team1Placeholder ?? "TBD",
+        team2Name: t2?.name ?? m.team2Placeholder ?? "TBD",
+        team1Flag: t1?.flagEmoji ?? "🏳️",
+        team2Flag: t2?.flagEmoji ?? "🏳️",
+        totalPeople: invites.length,
+        venueBreakdown,
+      };
+    })
+    .sort((a, b) => b.totalPeople - a.totalPeople);
+
+  // ── Build top bars ────────────────────────────────────────────────────────
+  const barCounts: Record<string, {
+    venueId: string | null;
+    name: string;
+    area: string | null;
+    mapsUrl: string | null;
+    totalPeople: number;
+    byMatch: { matchId: string; team1Name: string; team2Name: string; team1Flag: string; team2Flag: string; matchDatetime: string; people: string[] }[];
+  }> = {};
+
+  for (const inv of allInvites) {
+    const key = inv.venueId ?? inv.locationName ?? "Unknown";
+    const venue = inv.venueId ? venueMap.get(inv.venueId) : null;
+    const name = venue?.name ?? inv.locationName ?? "Unknown";
+    const area = venue?.area ?? null;
+    const mapsUrl = venue?.mapsUrl ?? null;
+
+    if (!barCounts[key]) {
+      barCounts[key] = { venueId: inv.venueId ?? null, name, area, mapsUrl, totalPeople: 0, byMatch: [] };
+    }
+    barCounts[key].totalPeople++;
+
+    const match = allMatches.find((m) => m.id === inv.matchId);
+    if (match) {
+      const t1 = match.team1Id ? teamMap.get(match.team1Id) : null;
+      const t2 = match.team2Id ? teamMap.get(match.team2Id) : null;
+      let matchEntry = barCounts[key].byMatch.find((bm) => bm.matchId === inv.matchId);
+      if (!matchEntry) {
+        matchEntry = {
+          matchId: match.id,
+          team1Name: t1?.name ?? match.team1Placeholder ?? "TBD",
+          team2Name: t2?.name ?? match.team2Placeholder ?? "TBD",
+          team1Flag: t1?.flagEmoji ?? "🏳️",
+          team2Flag: t2?.flagEmoji ?? "🏳️",
+          matchDatetime: match.matchDatetime.toISOString(),
+          people: [],
+        };
+        barCounts[key].byMatch.push(matchEntry);
+      }
+      matchEntry.people.push(inv.inviterName);
+    }
+  }
+
+  const topBars = Object.values(barCounts)
+    .sort((a, b) => b.totalPeople - a.totalPeople)
+    .map((bar) => ({
+      ...bar,
+      byMatch: bar.byMatch.sort((a, b) => b.people.length - a.people.length),
+    }));
+
+  return (
+    <WatchMapClient
+      hottestMatches={hottestMatches}
+      topBars={topBars}
+      currentUserId={session?.user?.id ?? null}
+    />
+  );
+}

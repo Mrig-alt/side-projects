@@ -19,6 +19,7 @@ export default function Header() {
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
           <Link href="/" className="hover:text-gray-900 transition-colors">Home</Link>
           <Link href="/schedule" className="hover:text-gray-900 transition-colors">Schedule</Link>
+          <Link href="/watchmap" className="hover:text-gray-900 transition-colors">Where to Watch</Link>
           <Link href="/students" className="hover:text-gray-900 transition-colors">Classmates</Link>
           <Link href="/leaderboard" className="hover:text-gray-900 transition-colors">Leaderboard</Link>
           <Link href="/feed" className="hover:text-gray-900 transition-colors">Feed</Link>
