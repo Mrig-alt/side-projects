@@ -17,7 +17,6 @@ export async function GET() {
     return NextResponse.json({ synced: 0 });
   }
 
-  // Build a lookup of country code → team id
   const allTeams = await db.select({ id: teams.id, countryCode: teams.countryCode }).from(teams);
   const teamByCode: Record<string, string> = {};
   for (const t of allTeams) teamByCode[t.countryCode] = t.id;
@@ -30,7 +29,11 @@ export async function GET() {
     const score1 = am.score.fullTime.home;
     const score2 = am.score.fullTime.away;
 
-    // Try to find by externalId first
+    // FIX: only transition to completed when scores are non-null.
+    // If the API emits FINISHED with null scores, treat as live so we retry on next sync.
+    const resolvedStatus =
+      newStatus === "completed" && (score1 === null || score2 === null) ? "live" : newStatus;
+
     const [existingByExtId] = await db
       .select()
       .from(matches)
@@ -39,16 +42,18 @@ export async function GET() {
 
     if (existingByExtId) {
       const wasCompleted = existingByExtId.status === "completed";
+      // FIX: if scores just became non-null on a previously completed match, re-settle
+      const scoresNowAvailable =
+        wasCompleted &&
+        (existingByExtId.team1Score === null || existingByExtId.team2Score === null) &&
+        score1 !== null && score2 !== null;
+
       await db
         .update(matches)
-        .set({
-          status: newStatus,
-          team1Score: score1,
-          team2Score: score2,
-        })
+        .set({ status: resolvedStatus, team1Score: score1, team2Score: score2 })
         .where(eq(matches.id, existingByExtId.id));
 
-      if (!wasCompleted && newStatus === "completed") {
+      if ((!wasCompleted && resolvedStatus === "completed") || scoresNowAvailable) {
         await settleBetsForMatch(existingByExtId.id);
         await settlePredictionsForMatch(existingByExtId.id);
         settled++;
@@ -57,42 +62,32 @@ export async function GET() {
       continue;
     }
 
-    // Try to match by date + team TLAs to link externalId for first time
-    const matchDate = new Date(am.utcDate);
     const tla1 = am.homeTeam.tla?.toUpperCase();
     const tla2 = am.awayTeam.tla?.toUpperCase();
-
     if (!tla1 || !tla2) continue;
-
     const team1Id = teamByCode[tla1];
     const team2Id = teamByCode[tla2];
-
     if (!team1Id || !team2Id) continue;
 
     const [existingByTeams] = await db
       .select()
       .from(matches)
-      .where(
-        and(
-          eq(matches.team1Id, team1Id),
-          eq(matches.team2Id, team2Id)
-        )
-      )
+      .where(and(eq(matches.team1Id, team1Id), eq(matches.team2Id, team2Id)))
       .limit(1);
 
     if (existingByTeams) {
       const wasCompleted = existingByTeams.status === "completed";
+      const scoresNowAvailable =
+        wasCompleted &&
+        (existingByTeams.team1Score === null || existingByTeams.team2Score === null) &&
+        score1 !== null && score2 !== null;
+
       await db
         .update(matches)
-        .set({
-          externalId: am.id,
-          status: newStatus,
-          team1Score: score1,
-          team2Score: score2,
-        })
+        .set({ externalId: am.id, status: resolvedStatus, team1Score: score1, team2Score: score2 })
         .where(eq(matches.id, existingByTeams.id));
 
-      if (!wasCompleted && newStatus === "completed") {
+      if ((!wasCompleted && resolvedStatus === "completed") || scoresNowAvailable) {
         await settleBetsForMatch(existingByTeams.id);
         await settlePredictionsForMatch(existingByTeams.id);
         settled++;

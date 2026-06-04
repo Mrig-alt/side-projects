@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { matches, teams, students, matchReactions, watchInvites, venues } from "@/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, inArray } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { formatMatchDate, formatKickoff, stageLabel } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -29,56 +29,47 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
     ? await db.select({ id: students.id, name: students.name }).from(students).where(and(eq(students.teamId, match.team2Id), eq(students.flagged, false)))
     : [];
 
-  // ── Watch plans for this match ─────────────────────────────────────────
+  // Watch plans
   const rawInvites = await db
-    .select({
-      id: watchInvites.id,
-      inviterId: watchInvites.inviterId,
-      venueId: watchInvites.venueId,
-      locationName: watchInvites.locationName,
-      locationUrl: watchInvites.locationUrl,
-      inviterName: students.name,
-    })
+    .select({ id: watchInvites.id, inviterId: watchInvites.inviterId, venueId: watchInvites.venueId, locationName: watchInvites.locationName, locationUrl: watchInvites.locationUrl, inviterName: students.name })
     .from(watchInvites)
     .innerJoin(students, eq(students.id, watchInvites.inviterId))
     .where(eq(watchInvites.matchId, id));
 
-  const allVenues = await db
-    .select({ id: venues.id, name: venues.name, area: venues.area, mapsUrl: venues.mapsUrl })
-    .from(venues);
+  const allVenues = await db.select({ id: venues.id, name: venues.name, area: venues.area, mapsUrl: venues.mapsUrl }).from(venues);
   const venueMap = new Map(allVenues.map((v) => [v.id, v]));
 
-  // Group by venue
-  const venueCounts: Record<string, {
-    name: string; area: string | null; mapsUrl: string | null; url: string | null;
-    count: number; people: string[];
-  }> = {};
+  const venueCounts: Record<string, { name: string; area: string | null; mapsUrl: string | null; url: string | null; count: number; people: string[] }> = {};
   for (const inv of rawInvites) {
     const key = inv.venueId ?? inv.locationName ?? "Unknown";
     const linked = inv.venueId ? venueMap.get(inv.venueId) : null;
     const name = linked?.name ?? inv.locationName ?? "Unknown";
-    const area = linked?.area ?? null;
-    const mapsUrl = linked?.mapsUrl ?? null;
-    if (!venueCounts[key]) venueCounts[key] = { name, area, mapsUrl, url: inv.locationUrl ?? null, count: 0, people: [] };
+    if (!venueCounts[key]) venueCounts[key] = { name, area: linked?.area ?? null, mapsUrl: linked?.mapsUrl ?? null, url: inv.locationUrl ?? null, count: 0, people: [] };
     venueCounts[key].count++;
     venueCounts[key].people.push(inv.inviterName);
   }
   const venueBreakdown = Object.values(venueCounts).sort((a, b) => b.count - a.count);
 
-  // ── Reactions ─────────────────────────────────────────────────────────
+  // Reactions
   const reactions = await db
     .select({ id: matchReactions.id, emoji: matchReactions.emoji, matchMinute: matchReactions.matchMinute, createdAt: matchReactions.createdAt, studentId: matchReactions.studentId })
     .from(matchReactions)
     .where(eq(matchReactions.matchId, id))
     .orderBy(asc(matchReactions.createdAt));
 
-  const reactionStudents = reactions.length > 0
-    ? await db.select({ id: students.id, name: students.name }).from(students).where(eq(students.flagged, false))
-    : [];
+  // FIX: only fetch students who actually authored a reaction — no full table scan
+  const reactorIds = [...new Set(reactions.map((r) => r.studentId))];
+  const reactionStudents =
+    reactorIds.length > 0
+      ? await db
+          .select({ id: students.id, name: students.name })
+          .from(students)
+          .where(and(inArray(students.id, reactorIds), eq(students.flagged, false)))
+      : [];
   const studentNameMap = new Map(reactionStudents.map((s) => [s.id, s.name]));
   const enrichedReactions = reactions.map((r) => ({
     ...r,
-    studentName: r.studentId === session?.user.id ? "You" : (studentNameMap.get(r.studentId) ?? "Classmate"),
+    studentName: r.studentId === session?.user?.id ? "You" : (studentNameMap.get(r.studentId) ?? "Classmate"),
   }));
 
   const isLive = match.status === "live";
@@ -90,12 +81,9 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
     <div className="mx-auto max-w-2xl space-y-6">
       <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">← Back</Link>
 
-      {/* Match header */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs text-gray-400">
-            {stageLabel(match.stage)}{match.groupName && ` · Group ${match.groupName}`}
-          </span>
+          <span className="text-xs text-gray-400">{stageLabel(match.stage)}{match.groupName && ` · Group ${match.groupName}`}</span>
           <div className="flex items-center gap-2">
             {isLive && <Badge variant="live">LIVE</Badge>}
             <span className="text-xs text-gray-400">{formatKickoff(match.matchDatetime)}</span>
@@ -106,45 +94,32 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
             <span className="text-5xl">{team1?.flagEmoji ?? "🏳️"}</span>
             <span className="text-sm font-semibold text-center">{t1Name}</span>
             <div className="flex flex-wrap justify-center gap-1 mt-1">
-              {team1Supporters.map((s) => (
-                <span key={s.id} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{s.name.split(" ")[0]}</span>
-              ))}
+              {team1Supporters.map((s) => (<span key={s.id} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{s.name.split(" ")[0]}</span>))}
             </div>
           </div>
           <div className="flex flex-col items-center shrink-0">
-            {isCompleted || isLive
-              ? <span className="text-3xl font-bold">{match.team1Score ?? 0}–{match.team2Score ?? 0}</span>
-              : <span className="text-xl text-gray-400">vs</span>}
+            {isCompleted || isLive ? <span className="text-3xl font-bold">{match.team1Score ?? 0}–{match.team2Score ?? 0}</span> : <span className="text-xl text-gray-400">vs</span>}
             {match.city && <span className="text-xs text-gray-400 mt-1">{match.city}</span>}
           </div>
           <div className="flex flex-col items-center gap-1 flex-1">
             <span className="text-5xl">{team2?.flagEmoji ?? "🏳️"}</span>
             <span className="text-sm font-semibold text-center">{t2Name}</span>
             <div className="flex flex-wrap justify-center gap-1 mt-1">
-              {team2Supporters.map((s) => (
-                <span key={s.id} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{s.name.split(" ")[0]}</span>
-              ))}
+              {team2Supporters.map((s) => (<span key={s.id} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{s.name.split(" ")[0]}</span>))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Where people are watching */}
       <section>
         <h2 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
           <MapPin className="h-4 w-4 text-green-500" /> Where people are watching
-          {rawInvites.length > 0 && (
-            <span className="text-xs font-normal text-gray-400 flex items-center gap-1">
-              <Users className="h-3.5 w-3.5" />{rawInvites.length} going
-            </span>
-          )}
+          {rawInvites.length > 0 && <span className="text-xs font-normal text-gray-400 flex items-center gap-1"><Users className="h-3.5 w-3.5" />{rawInvites.length} going</span>}
         </h2>
         {venueBreakdown.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">
             No watch plans yet.
-            {match.status !== "completed" && (
-              <Link href="/watchmap" className="ml-1 text-green-600 font-medium hover:underline">Add yours →</Link>
-            )}
+            {match.status !== "completed" && <Link href="/watchmap" className="ml-1 text-green-600 font-medium hover:underline">Add yours →</Link>}
           </div>
         ) : (
           <div className="space-y-2">
@@ -168,18 +143,13 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
                 </div>
               </div>
             ))}
-            {match.status !== "completed" && (
-              <Link href="/watchmap" className="block text-center text-xs text-green-600 hover:underline pt-1">Update your plan →</Link>
-            )}
+            {match.status !== "completed" && <Link href="/watchmap" className="block text-center text-xs text-green-600 hover:underline pt-1">Update your plan →</Link>}
           </div>
         )}
       </section>
 
-      {/* Reactions */}
       <section>
-        <h2 className="text-base font-semibold text-gray-900 mb-3">
-          {isLive ? "🔴 Live reactions" : "Reactions"}
-        </h2>
+        <h2 className="text-base font-semibold text-gray-900 mb-3">{isLive ? "🔴 Live reactions" : "Reactions"}</h2>
         {session ? (
           <ReactionTimeline matchId={id} reactions={enrichedReactions} isLive={isLive} />
         ) : (
@@ -189,7 +159,6 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
         )}
       </section>
 
-      {/* Live bar reports */}
       <div className="border-t border-gray-100 pt-4">
         <LiveReportsWidget
           currentUserId={session?.user?.id ?? null}

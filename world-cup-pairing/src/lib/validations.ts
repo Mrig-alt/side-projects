@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+const safeUrl = z
+  .string()
+  .url("Must be a valid URL")
+  .max(500)
+  .refine(
+    (u) => {
+      const lower = u.toLowerCase().trim();
+      return !lower.startsWith("javascript:") && !lower.startsWith("data:") && !lower.startsWith("vbscript:");
+    },
+    { message: "URL scheme not allowed" }
+  );
+
 export const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
   email: z.string().email("Invalid email address"),
@@ -45,13 +57,7 @@ export const watchTogetherSchema = z.object({
   matchId: z.string().uuid(),
   venueId: z.string().uuid().optional().nullable(),
   locationName: z.string().min(1).max(200),
-  locationUrl: z
-    .string()
-    .url("Must be a valid URL")
-    .max(500)
-    .optional()
-    .nullable()
-    .or(z.literal("")),
+  locationUrl: safeUrl.optional().nullable().or(z.literal("")),
 });
 
 export const connectionSchema = z.object({
