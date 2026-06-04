@@ -21,6 +21,10 @@ export const authConfig = {
         token.tokenBalance = (user as { tokenBalance?: number }).tokenBalance ?? 100;
         token.email = (user as { email?: string }).email ?? null;
       }
+      // Always ensure token.id is set — old sessions may only have token.sub
+      if (!token.id && token.sub) {
+        token.id = token.sub;
+      }
       return token;
     },
     async session({ session, token }) {
