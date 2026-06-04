@@ -10,6 +10,12 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+      # NextAuth v5 uses AUTH_SECRET + AUTH_URL (required for cookie signing)
+      - key: AUTH_SECRET
+        sync: false
+      - key: AUTH_URL
+        sync: false
+      # Legacy names kept for backwards compat
       - key: NEXTAUTH_SECRET
         sync: false
       - key: NEXTAUTH_URL
