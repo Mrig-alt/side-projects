@@ -117,7 +117,9 @@ export default function JoinPage() {
           email: email.trim().toLowerCase(),
           nationality: nationality.trim() || undefined,
           pin,
-          teamId,
+          // FIX: send undefined (not null) when no team selected so Zod
+          // .string().uuid().optional() passes cleanly without a null coercion error
+          teamId: teamId || undefined,
           isHonoraryFan,
           visibility,
         }),

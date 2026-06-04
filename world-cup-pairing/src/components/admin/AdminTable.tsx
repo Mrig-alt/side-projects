@@ -39,6 +39,22 @@ export default function AdminTable({ students }: { students: Student[] }) {
     });
   };
 
+  const deleteStudent = (id: string, name: string) => {
+    if (!confirm(`Permanently delete "${name}"? This cannot be undone.`)) return;
+    setActionId(id);
+    startTransition(async () => {
+      const res = await fetch("/api/admin/moderate", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setRows((prev) => prev.filter((s) => s.id !== id));
+      }
+      setActionId(null);
+    });
+  };
+
   return (
     <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-x-auto">
       <table className="w-full text-sm">
@@ -77,7 +93,7 @@ export default function AdminTable({ students }: { students: Student[] }) {
               <td className="px-3 py-2 text-gray-400 whitespace-nowrap text-xs">
                 {new Date(s.createdAt).toLocaleDateString()}
               </td>
-              <td className="px-3 py-2 whitespace-nowrap">
+              <td className="px-3 py-2 whitespace-nowrap flex gap-1.5 items-center">
                 {s.flagged ? (
                   <button
                     disabled={pending && actionId === s.id}
@@ -95,6 +111,13 @@ export default function AdminTable({ students }: { students: Student[] }) {
                     {pending && actionId === s.id ? "⏳" : "Flag"}
                   </button>
                 )}
+                <button
+                  disabled={pending && actionId === s.id}
+                  onClick={() => deleteStudent(s.id, s.name)}
+                  className="rounded px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-50"
+                >
+                  {pending && actionId === s.id ? "⏳" : "Delete"}
+                </button>
               </td>
             </tr>
           ))}

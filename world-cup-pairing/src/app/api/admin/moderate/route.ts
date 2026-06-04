@@ -44,3 +44,24 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ student: updated });
 }
+
+// DELETE /api/admin/moderate
+// Body: { id: string }
+// Permanently removes a student row — use for test account cleanup only
+export async function DELETE(req: Request) {
+  const session = await auth();
+  if (!isAdmin(session?.user?.email)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const { id } = body as { id: string };
+
+  if (!id) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+
+  await db.delete(students).where(eq(students.id, id));
+
+  return NextResponse.json({ deleted: id });
+}
