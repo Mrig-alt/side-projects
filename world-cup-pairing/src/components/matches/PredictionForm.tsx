@@ -9,13 +9,14 @@ interface PredictionFormProps {
   team2: { name: string; flagEmoji: string };
   existing?: { predictedScore1: number; predictedScore2: number } | null;
   locked?: boolean;
+  onDone?: () => void;
 }
 
-export default function PredictionForm({ matchId, team1, team2, existing, locked }: PredictionFormProps) {
+export default function PredictionForm({ matchId, team1, team2, existing, locked, onDone }: PredictionFormProps) {
   const [score1, setScore1] = useState(existing?.predictedScore1 ?? 0);
   const [score2, setScore2] = useState(existing?.predictedScore2 ?? 0);
   const [loading, setLoading] = useState(false);
-  const [saved, setSaved] = useState(!!existing);
+  const [saved, setSaved] = useState(false);
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -25,7 +26,11 @@ export default function PredictionForm({ matchId, team1, team2, existing, locked
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ matchId, predictedScore1: score1, predictedScore2: score2 }),
       });
-      if (res.ok) setSaved(true);
+      if (res.ok) {
+        setSaved(true);
+        // Collapse the form back to the chip after a moment
+        setTimeout(() => onDone?.(), 800);
+      }
     } finally {
       setLoading(false);
     }
