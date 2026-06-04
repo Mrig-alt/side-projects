@@ -15,7 +15,6 @@ export default function AccountPage() {
   const [visibility, setVisibility] = useState<Visibility>((session?.user.visibility as Visibility) ?? "public");
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
-  // Live token balance — fetched from DB, not stale JWT
   const [liveTokens, setLiveTokens] = useState<number | null>(null);
 
   useEffect(() => {
@@ -54,7 +53,6 @@ export default function AccountPage() {
     <div className="mx-auto max-w-xl space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">My Account</h1>
 
-      {/* Profile summary */}
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -70,7 +68,6 @@ export default function AccountPage() {
         </div>
       </div>
 
-      {/* Visibility */}
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
         <h2 className="font-semibold text-gray-900">Privacy mode</h2>
         <VisibilitySelector
@@ -82,7 +79,6 @@ export default function AccountPage() {
         </Button>
       </div>
 
-      {/* Data export */}
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-3">
         <h2 className="font-semibold text-gray-900">Your data</h2>
         <p className="text-sm text-gray-500">Download all your data as JSON (GDPR export).</p>
@@ -94,11 +90,11 @@ export default function AccountPage() {
         </a>
       </div>
 
-      {/* Sign out */}
+      {/* Sign out — redirect to / not /join to avoid NEXTAUTH_URL callbackUrl mismatch */}
       <Button
         variant="outline"
         className="w-full text-red-600 border-red-200 hover:bg-red-50"
-        onClick={() => signOut({ callbackUrl: "/join" })}
+        onClick={() => signOut({ callbackUrl: "/" })}
       >
         Sign out
       </Button>
