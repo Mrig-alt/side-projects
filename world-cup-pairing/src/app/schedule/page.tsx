@@ -81,18 +81,22 @@ export default async function SchedulePage() {
                 const t1 = match.team1Id ? teamMap.get(match.team1Id) ?? null : null;
                 const t2 = match.team2Id ? teamMap.get(match.team2Id) ?? null : null;
 
-                const team1Supporters = allStudents.filter(
-                  (s) => s.teamId === match.team1Id && s.visibility !== "stealth"
-                );
-                const team2Supporters = allStudents.filter(
-                  (s) => s.teamId === match.team2Id && s.visibility !== "stealth"
-                );
+                // FIX: guard null teamId — null===null would match all teamless
+                // students to every TBD knockout slot (same bug fixed on home page)
+                const team1Supporters = match.team1Id !== null
+                  ? allStudents.filter((s) => s.teamId === match.team1Id && s.visibility !== "stealth")
+                  : [];
+                const team2Supporters = match.team2Id !== null
+                  ? allStudents.filter((s) => s.teamId === match.team2Id && s.visibility !== "stealth")
+                  : [];
+
                 const myPred = myPredictions.find((p) => p.matchId === match.id);
                 const myInvite = allInvites.find((i) => i.matchId === match.id && i.inviterId === validSession?.user.id);
 
                 const myTeamId = validSession?.user.teamId;
-                const isOnTeam1 = myTeamId === match.team1Id;
-                const isOnTeam2 = myTeamId === match.team2Id;
+                // FIX: same null guard for isOnTeam checks
+                const isOnTeam1 = myTeamId !== null && myTeamId !== undefined && myTeamId === match.team1Id;
+                const isOnTeam2 = myTeamId !== null && myTeamId !== undefined && myTeamId === match.team2Id;
                 const opponentTeamSupporters = isOnTeam1 ? team2Supporters : isOnTeam2 ? team1Supporters : [];
                 const opponentInviteRaw = allInvites.find(
                   (i) => i.matchId === match.id && opponentTeamSupporters.map((s) => s.id).includes(i.inviterId)
@@ -131,12 +135,11 @@ export default async function SchedulePage() {
       </div>
     );
   } catch (e) {
+    // FIX: log full error server-side only — never expose stack/message in HTML
+    console.error("[schedule] render error", e);
     return (
-      <div style={{ padding: 24, background: "#fef2f2", borderRadius: 8, margin: 16 }}>
-        <h2 style={{ fontWeight: 700, color: "#991b1b", marginBottom: 8 }}>Schedule render error (debug):</h2>
-        <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", color: "#7f1d1d" }}>
-          {e instanceof Error ? `${e.message}\n\n${e.stack}` : String(e)}
-        </pre>
+      <div className="rounded-xl border border-red-100 bg-red-50 p-6 text-center text-sm text-red-600 m-4">
+        Something went wrong loading the schedule. Please refresh or try again shortly.
       </div>
     );
   }
