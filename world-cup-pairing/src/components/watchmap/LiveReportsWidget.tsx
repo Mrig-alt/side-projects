@@ -5,13 +5,13 @@ import { cn } from "@/lib/utils";
 import { Flame, MapPin, RefreshCw, Send, ChevronDown, ChevronUp } from "lucide-react";
 
 const STATUS_OPTIONS = [
-  { value: "buzzing",      label: "Buzzing 🟢",      color: "bg-green-100 text-green-800 border-green-200" },
-  { value: "getting_busy", label: "Getting busy 🟡", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
-  { value: "packed",       label: "Packed 🔴",        color: "bg-red-100 text-red-800 border-red-200" },
-  { value: "queue_outside",label: "Queue outside ⏳", color: "bg-orange-100 text-orange-800 border-orange-200" },
-  { value: "entry_fee",    label: "Entry fee 💰",    color: "bg-purple-100 text-purple-800 border-purple-200" },
-  { value: "good_screens", label: "Great screens 📺",color: "bg-blue-100 text-blue-800 border-blue-200" },
-  { value: "quiet_now",    label: "Quiet now 🙊",    color: "bg-gray-100 text-gray-700 border-gray-200" },
+  { value: "buzzing",       label: "Buzzing 🟢",       color: "bg-green-100 text-green-800 border-green-200" },
+  { value: "getting_busy",  label: "Getting busy 🟡",  color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+  { value: "packed",        label: "Packed 🔴",         color: "bg-red-100 text-red-800 border-red-200" },
+  { value: "queue_outside", label: "Queue outside ⏳",  color: "bg-orange-100 text-orange-800 border-orange-200" },
+  { value: "entry_fee",     label: "Entry fee 💰",      color: "bg-purple-100 text-purple-800 border-purple-200" },
+  { value: "good_screens",  label: "Great screens 📺",  color: "bg-blue-100 text-blue-800 border-blue-200" },
+  { value: "quiet_now",     label: "Quiet now 🙊",      color: "bg-gray-100 text-gray-700 border-gray-200" },
 ] as const;
 
 type StatusValue = typeof STATUS_OPTIONS[number]["value"];
@@ -61,7 +61,6 @@ export default function LiveReportsWidget({
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  // Post form state
   const [posting, setPosting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [selStatus, setSelStatus] = useState<StatusValue | null>(null);
@@ -113,8 +112,10 @@ export default function LiveReportsWidget({
     finally { setPosting(false); }
   };
 
-  // Group for Bar Reports tab
-  const barMap: Record<string, { venueName: string; venueArea: string | null; venueMapsUrl: string | null; latestStatus: StatusValue; latestTime: string; reports: Report[] }> = {};
+  const barMap: Record<string, {
+    venueName: string; venueArea: string | null; venueMapsUrl: string | null;
+    latestStatus: StatusValue; latestTime: string; reports: Report[];
+  }> = {};
   for (const r of reports) {
     const key = r.venueId ?? r.venueName;
     if (!barMap[key]) barMap[key] = { venueName: r.venueName, venueArea: r.venueArea, venueMapsUrl: r.venueMapsUrl, latestStatus: r.status, latestTime: r.createdAt, reports: [] };
@@ -129,138 +130,78 @@ export default function LiveReportsWidget({
           <h2 className="text-lg font-bold text-gray-900">🔴 Live Reports</h2>
           <p className="text-xs text-gray-400">Updates from the last 3 hours · refreshes every 30s</p>
         </div>
-        <button
-          onClick={() => fetchReports()}
-          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-          title="Refresh"
-        >
+        <button onClick={fetchReports} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" title="Refresh">
           <RefreshCw className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Tabs */}
       <div className="flex rounded-xl bg-gray-100 p-1 gap-1">
-        <button
-          onClick={() => setTab("live")}
-          className={cn("flex-1 rounded-lg py-2 text-sm font-semibold transition-all",
-            tab === "live" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700")}
-        >
+        <button onClick={() => setTab("live")} className={cn("flex-1 rounded-lg py-2 text-sm font-semibold transition-all", tab === "live" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700")}>
           🔥 Live Now
         </button>
-        <button
-          onClick={() => setTab("bars")}
-          className={cn("flex-1 rounded-lg py-2 text-sm font-semibold transition-all",
-            tab === "bars" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700")}
-        >
+        <button onClick={() => setTab("bars")} className={cn("flex-1 rounded-lg py-2 text-sm font-semibold transition-all", tab === "bars" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700")}>
           🍺 Bar Reports
         </button>
       </div>
 
-      {/* Post a report */}
       {currentUserId && (
         <div>
           {!showForm ? (
-            <button
-              onClick={() => setShowForm(true)}
-              className="w-full rounded-xl border-2 border-dashed border-gray-200 py-3 text-sm text-gray-400 hover:border-green-300 hover:text-green-600 transition-colors font-medium"
-            >
+            <button onClick={() => setShowForm(true)} className="w-full rounded-xl border-2 border-dashed border-gray-200 py-3 text-sm text-gray-400 hover:border-green-300 hover:text-green-600 transition-colors font-medium">
               + Report from where you are
             </button>
           ) : (
             <div className="rounded-xl border border-gray-100 bg-white shadow-sm p-4 space-y-3">
-              <p className="text-sm font-semibold text-gray-800">What’s the situation?</p>
-
-              {/* Status chips */}
+              <p className="text-sm font-semibold text-gray-800">What's the situation?</p>
               <div className="flex flex-wrap gap-2">
                 {STATUS_OPTIONS.map((s) => (
-                  <button
-                    key={s.value}
-                    onClick={() => setSelStatus(s.value)}
-                    className={cn(
-                      "text-xs font-semibold px-3 py-1.5 rounded-full border transition-all",
-                      selStatus === s.value ? s.color + " ring-2 ring-offset-1 ring-current" : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                    )}
-                  >
+                  <button key={s.value} onClick={() => setSelStatus(s.value)}
+                    className={cn("text-xs font-semibold px-3 py-1.5 rounded-full border transition-all",
+                      selStatus === s.value ? s.color + " ring-2 ring-offset-1 ring-current" : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100")}>
                     {s.label}
                   </button>
                 ))}
               </div>
-
-              {/* Venue */}
               <div>
                 <p className="text-xs text-gray-500 mb-1.5 font-medium">Which bar / venue?</p>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {knownVenues.map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => { setSelVenueId(v.id); setFreeVenue(""); }}
-                      className={cn(
-                        "text-xs px-3 py-1.5 rounded-full border font-medium transition-all",
-                        selVenueId === v.id
-                          ? "bg-green-100 text-green-800 border-green-300"
-                          : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                      )}
-                    >
+                    <button key={v.id} onClick={() => { setSelVenueId(v.id); setFreeVenue(""); }}
+                      className={cn("text-xs px-3 py-1.5 rounded-full border font-medium transition-all",
+                        selVenueId === v.id ? "bg-green-100 text-green-800 border-green-300" : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100")}>
                       {v.name}{v.area ? ` · ${v.area}` : ""}
                     </button>
                   ))}
                 </div>
                 {!selVenueId && (
-                  <input
-                    type="text"
-                    placeholder="Or type venue name…"
-                    value={freeVenue}
+                  <input type="text" placeholder="Or type venue name…" value={freeVenue}
                     onChange={(e) => setFreeVenue(e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
                 )}
                 {selVenueId && (
-                  <button
-                    onClick={() => setSelVenueId(null)}
-                    className="text-xs text-gray-400 hover:text-gray-600 mt-1"
-                  >
-                    × Change venue
-                  </button>
+                  <button onClick={() => setSelVenueId(null)} className="text-xs text-gray-400 hover:text-gray-600 mt-1">× Change venue</button>
                 )}
               </div>
-
-              {/* Optional comment */}
               <textarea
-                placeholder="Add a comment (optional) — e.g. \"great atmosphere, DJ on later\""
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                rows={2}
-                maxLength={300}
+                placeholder="Add a comment (optional)"
+                value={comment} onChange={(e) => setComment(e.target.value)}
+                rows={2} maxLength={300}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
               />
-
               {postError && <p className="text-xs text-red-500">{postError}</p>}
-
               <div className="flex gap-2">
-                <button
-                  onClick={handlePost}
-                  disabled={posting}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  {posting ? "Posting…" : "Post report"}
+                <button onClick={handlePost} disabled={posting}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors disabled:opacity-50">
+                  <Send className="h-3.5 w-3.5" />{posting ? "Posting…" : "Post report"}
                 </button>
-                <button
-                  onClick={() => { setShowForm(false); setPostError(""); }}
-                  className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
+                <button onClick={() => { setShowForm(false); setPostError(""); }} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100">Cancel</button>
               </div>
             </div>
           )}
-          {postSuccess && (
-            <p className="text-center text-sm text-green-600 font-medium py-1">✅ Report posted!</p>
-          )}
+          {postSuccess && <p className="text-center text-sm text-green-600 font-medium py-1">✅ Report posted!</p>}
         </div>
       )}
 
-      {/* Live Now tab */}
       {tab === "live" && (
         <div className="space-y-2">
           {loading && <p className="text-center text-sm text-gray-400 py-6">Loading…</p>}
@@ -283,7 +224,7 @@ export default function LiveReportsWidget({
                     <span className="font-medium">{r.venueName}</span>
                     {r.venueArea && <span className="text-gray-400 text-xs">· {r.venueArea}</span>}
                   </div>
-                  {r.comment && <p className="text-sm text-gray-600 italic">“{r.comment}”</p>}
+                  {r.comment && <p className="text-sm text-gray-600 italic">&ldquo;{r.comment}&rdquo;</p>}
                 </div>
                 <span className="text-xs text-gray-400 shrink-0">{r.studentName}</span>
               </div>
@@ -292,7 +233,6 @@ export default function LiveReportsWidget({
         </div>
       )}
 
-      {/* Bar Reports tab */}
       {tab === "bars" && (
         <div className="space-y-2">
           {loading && <p className="text-center text-sm text-gray-400 py-6">Loading…</p>}
@@ -304,10 +244,7 @@ export default function LiveReportsWidget({
           )}
           {bars.map((bar) => (
             <div key={bar.venueName} className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-              <button
-                className="w-full text-left px-4 py-3"
-                onClick={() => setExpanded(expanded === bar.venueName ? null : bar.venueName)}
-              >
+              <button className="w-full text-left px-4 py-3" onClick={() => setExpanded(expanded === bar.venueName ? null : bar.venueName)}>
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-1.5">
@@ -334,7 +271,7 @@ export default function LiveReportsWidget({
                         <StatusBadge status={r.status} />
                         <span className="text-xs text-gray-400">{r.studentName} · {timeAgo(r.createdAt)}</span>
                       </div>
-                      {r.comment && <p className="text-sm text-gray-600 italic mt-1">“{r.comment}”</p>}
+                      {r.comment && <p className="text-sm text-gray-600 italic mt-1">&ldquo;{r.comment}&rdquo;</p>}
                     </div>
                   ))}
                 </div>
