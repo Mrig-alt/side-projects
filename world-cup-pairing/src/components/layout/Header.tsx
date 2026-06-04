@@ -2,22 +2,29 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Trophy, Coins } from "lucide-react";
 
 export default function Header() {
   const { data: session } = useSession();
   const [liveTokens, setLiveTokens] = useState<number | null>(null);
 
-  // Fetch live token balance from DB on mount and whenever the session user changes.
-  // useSession() only has the JWT snapshot — it goes stale after predictions/bets.
-  useEffect(() => {
+  const fetchTokens = useCallback(() => {
     if (!session?.user?.id) { setLiveTokens(null); return; }
     fetch("/api/students/me")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.tokenBalance != null) setLiveTokens(d.tokenBalance); })
       .catch(() => {});
   }, [session?.user?.id]);
+
+  // Fetch on mount and when user changes
+  useEffect(() => { fetchTokens(); }, [fetchTokens]);
+
+  // Re-fetch whenever a prediction or bet fires the 'token-refresh' event
+  useEffect(() => {
+    window.addEventListener("token-refresh", fetchTokens);
+    return () => window.removeEventListener("token-refresh", fetchTokens);
+  }, [fetchTokens]);
 
   const displayTokens = liveTokens ?? session?.user?.tokenBalance ?? 0;
 

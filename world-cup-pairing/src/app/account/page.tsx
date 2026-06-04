@@ -1,14 +1,11 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import VisibilitySelector from "@/components/profile/VisibilitySelector";
-import Link from "next/link";
 
 type Visibility = "public" | "friends" | "stealth";
 
@@ -18,11 +15,23 @@ export default function AccountPage() {
   const [visibility, setVisibility] = useState<Visibility>((session?.user.visibility as Visibility) ?? "public");
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Live token balance — fetched from DB, not stale JWT
+  const [liveTokens, setLiveTokens] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    fetch("/api/students/me")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.tokenBalance != null) setLiveTokens(d.tokenBalance); })
+      .catch(() => {});
+  }, [session?.user?.id]);
 
   if (!session) {
     router.push("/join");
     return null;
   }
+
+  const displayTokens = liveTokens ?? session.user.tokenBalance ?? 0;
 
   const handleSave = async () => {
     setLoading(true);
@@ -53,8 +62,11 @@ export default function AccountPage() {
             <p className="text-sm text-gray-500">{session.user.email}</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">🪙 {session.user.tokenBalance}</span>
+            <span className="text-lg font-bold text-yellow-600">\uD83E\uDE99 {displayTokens}</span>
           </div>
+        </div>
+        <div className="flex gap-3 pt-1">
+          <a href="/leaderboard" className="text-xs text-green-600 hover:underline">See leaderboard \u2192</a>
         </div>
       </div>
 
@@ -66,7 +78,7 @@ export default function AccountPage() {
           onChange={(v) => { setVisibility(v); setSaved(false); }}
         />
         <Button onClick={handleSave} loading={loading} className="w-full">
-          {saved ? "✓ Saved" : "Save changes"}
+          {saved ? "\u2713 Saved" : "Save changes"}
         </Button>
       </div>
 
@@ -82,7 +94,7 @@ export default function AccountPage() {
         </a>
       </div>
 
-      {/* Sign out — always lands on /join, never loops back */}
+      {/* Sign out */}
       <Button
         variant="outline"
         className="w-full text-red-600 border-red-200 hover:bg-red-50"
