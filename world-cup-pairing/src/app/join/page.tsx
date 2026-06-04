@@ -245,7 +245,10 @@ export default function JoinPage() {
       {mode === "new" && step === "team" && (
         <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900">Pick your team</h2>
+            <div>
+              <h2 className="font-semibold text-gray-900">Pick your team</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Optional — you can skip and set it later</p>
+            </div>
             {selectedTeam && (
               <span className="flex items-center gap-1 text-sm font-medium text-green-700">
                 {selectedTeam.flagEmoji} {selectedTeam.name}
@@ -254,9 +257,20 @@ export default function JoinPage() {
             )}
           </div>
           <TeamGrid teams={teams} selectedTeamId={teamId} onSelect={setTeamId} />
-          <Button className="w-full mt-2" disabled={!teamId} onClick={() => setStep("visibility")}>
-            Continue
-          </Button>
+          <div className="flex flex-col gap-2 mt-2">
+            <Button className="w-full" onClick={() => setStep("visibility")}>
+              {teamId ? "Continue →" : "Continue without a team →"}
+            </Button>
+            {teamId && (
+              <button
+                type="button"
+                className="text-xs text-gray-400 hover:text-gray-600 text-center"
+                onClick={() => { setTeamId(null); }}
+              >
+                Clear selection
+              </button>
+            )}
+          </div>
         </div>
       )}
 
