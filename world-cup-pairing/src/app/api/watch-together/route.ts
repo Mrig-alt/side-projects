@@ -15,6 +15,7 @@ export async function GET(req: Request) {
       id: watchInvites.id,
       locationName: watchInvites.locationName,
       locationUrl: watchInvites.locationUrl,
+      venueId: watchInvites.venueId,
       inviterName: students.name,
       inviterId: watchInvites.inviterId,
       createdAt: watchInvites.createdAt,
@@ -23,11 +24,18 @@ export async function GET(req: Request) {
     .innerJoin(students, eq(students.id, watchInvites.inviterId))
     .where(eq(watchInvites.matchId, matchId));
 
-  // Group by location so multiple people at the same spot merge
-  const locations: Record<string, { locationName: string; locationUrl: string | null; people: string[] }> = {};
+  // Group by venueId if set, otherwise fall back to locationName string
+  const locations: Record<string, { locationName: string; locationUrl: string | null; venueId: string | null; people: string[] }> = {};
   for (const inv of invites) {
-    const key = inv.locationName ?? "Unknown";
-    if (!locations[key]) locations[key] = { locationName: key, locationUrl: inv.locationUrl ?? null, people: [] };
+    const key = inv.venueId ?? inv.locationName ?? "Unknown";
+    if (!locations[key]) {
+      locations[key] = {
+        locationName: inv.locationName ?? "Unknown",
+        locationUrl: inv.locationUrl ?? null,
+        venueId: inv.venueId ?? null,
+        people: [],
+      };
+    }
     locations[key].people.push(inv.inviterName);
   }
 
@@ -44,7 +52,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
   }
 
-  const { matchId, locationName, locationUrl } = parsed.data;
+  const { matchId, venueId, locationName, locationUrl } = parsed.data;
 
   const existing = await db
     .select({ id: watchInvites.id })
@@ -55,7 +63,11 @@ export async function POST(req: Request) {
   if (existing.length > 0) {
     const [updated] = await db
       .update(watchInvites)
-      .set({ locationName, locationUrl: locationUrl || null })
+      .set({
+        venueId: venueId ?? null,
+        locationName,
+        locationUrl: locationUrl || null,
+      })
       .where(eq(watchInvites.id, existing[0].id))
       .returning();
     return NextResponse.json({ invite: updated });
@@ -63,7 +75,13 @@ export async function POST(req: Request) {
 
   const [invite] = await db
     .insert(watchInvites)
-    .values({ inviterId: session.user.id, matchId, locationName, locationUrl: locationUrl || null })
+    .values({
+      inviterId: session.user.id,
+      matchId,
+      venueId: venueId ?? null,
+      locationName,
+      locationUrl: locationUrl || null,
+    })
     .returning();
 
   return NextResponse.json({ invite }, { status: 201 });

@@ -3,7 +3,6 @@ import { z } from "zod";
 export const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
   email: z.string().email("Invalid email address"),
-  // Preprocess: treat empty/short strings as undefined before validation
   nationality: z.preprocess(
     (v) => (typeof v === "string" && v.trim().length < 2 ? undefined : v),
     z.string().max(100).optional()
@@ -44,12 +43,14 @@ export const vibeSchema = z.object({
 
 export const watchTogetherSchema = z.object({
   matchId: z.string().uuid(),
+  venueId: z.string().uuid().optional().nullable(),
   locationName: z.string().min(1).max(200),
   locationUrl: z
     .string()
     .url("Must be a valid URL")
     .max(500)
     .optional()
+    .nullable()
     .or(z.literal("")),
 });
 
