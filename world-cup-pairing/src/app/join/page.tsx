@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import TeamGrid from "@/components/teams/TeamGrid";
@@ -34,10 +34,10 @@ function formatError(error: unknown): string {
   return "Registration failed";
 }
 
-export default function JoinPage() {
+// Inner component uses useSearchParams — must be inside <Suspense>
+function JoinPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // ?next= lets any page send the user back after login (e.g. /matches/abc)
   const next = searchParams.get("next") ?? "/";
 
   const [teams, setTeams] = useState<Team[]>([]);
@@ -106,7 +106,6 @@ export default function JoinPage() {
     });
     setLoading(false);
     if (result?.ok) {
-      // Go back to wherever the user came from, or home
       router.push(next);
     } else {
       setError(pinRequired ? "Wrong PIN — ask whoever set up the app for the class PIN." : "Sign in failed — please try again.");
@@ -310,5 +309,18 @@ export default function JoinPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// Suspense wrapper required by Next.js when useSearchParams is used at the page level
+export default function JoinPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
+      </div>
+    }>
+      <JoinPageInner />
+    </Suspense>
   );
 }
