@@ -7,7 +7,7 @@ import { formatMatchDate, formatKickoff, stageLabel } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import ReactionTimeline from "@/components/matches/ReactionTimeline";
 import LiveReportsWidget from "@/components/watchmap/LiveReportsWidget";
-import PredictionForm from "@/components/matches/PredictionForm";
+import MatchDetailPrediction from "@/components/matches/MatchDetailPrediction";
 import Link from "next/link";
 import { MapPin, ExternalLink, Users } from "lucide-react";
 
@@ -78,12 +78,11 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
 
   const existingPrediction = (myPrediction as Array<typeof myPrediction[0]>)[0] ?? null;
   const canPredict = !!session?.user?.id && isUpcoming && !!team1 && !!team2;
-  // URL to send logged-out users back here after login
   const loginReturnUrl = `/join?next=/matches/${id}`;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">← Back</Link>
+      <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">&larr; Back</Link>
 
       {/* Match header */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -120,24 +119,21 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
         </div>
       </div>
 
-      {/* Prediction card */}
+      {/* Prediction card — client component handles collapse/expand + token refresh */}
       {canPredict && (
-        <div className="rounded-2xl border border-green-100 bg-green-50 p-4 shadow-sm">
-          <p className="text-sm font-semibold text-green-800 mb-3">
-            🏆 {existingPrediction ? "Your prediction — tap to update" : "Predict the score — earn tokens!"}
-          </p>
-          <PredictionForm
-            matchId={id}
-            team1={team1}
-            team2={team2}
-            existing={existingPrediction ? { predictedScore1: existingPrediction.predictedScore1, predictedScore2: existingPrediction.predictedScore2 } : null}
-            locked={false}
-          />
-          <p className="text-xs text-green-700 mt-2">Exact score → +15 tokens · Correct result → +5 tokens</p>
-        </div>
+        <MatchDetailPrediction
+          matchId={id}
+          team1={team1!}
+          team2={team2!}
+          existing={
+            existingPrediction
+              ? { predictedScore1: existingPrediction.predictedScore1, predictedScore2: existingPrediction.predictedScore2 }
+              : null
+          }
+        />
       )}
 
-      {/* Logged-out CTA — sends back here after login */}
+      {/* Logged-out CTA */}
       {!session?.user?.id && isUpcoming && team1 && team2 && (
         <div className="rounded-2xl border border-gray-100 bg-white p-4 text-center text-sm text-gray-500">
           <Link href={loginReturnUrl} className="text-green-600 font-medium hover:underline">
@@ -156,7 +152,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
         {venueBreakdown.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">
             No watch plans yet.
-            {match.status !== "completed" && <Link href="/watchmap" className="ml-1 text-green-600 font-medium hover:underline">Add yours →</Link>}
+            {match.status !== "completed" && <Link href="/watchmap" className="ml-1 text-green-600 font-medium hover:underline">Add yours &rarr;</Link>}
           </div>
         ) : (
           <div className="space-y-2">
@@ -180,7 +176,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
                 </div>
               </div>
             ))}
-            {match.status !== "completed" && <Link href="/watchmap" className="block text-center text-xs text-green-600 hover:underline pt-1">Update your plan →</Link>}
+            {match.status !== "completed" && <Link href="/watchmap" className="block text-center text-xs text-green-600 hover:underline pt-1">Update your plan &rarr;</Link>}
           </div>
         )}
       </section>
