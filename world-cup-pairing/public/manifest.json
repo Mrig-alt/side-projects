@@ -1,12 +1,12 @@
 {
   "name": "IE World Cup 2026",
-  "short_name": "WC 2026",
-  "description": "Track your class pairings, predictions and reactions for World Cup 2026",
+  "short_name": "WC2026",
+  "description": "Track matches, predict scores and find classmates watching together",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#16a34a",
-  "orientation": "portrait-primary",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -21,17 +21,14 @@
       "purpose": "any maskable"
     }
   ],
-  "shortcuts": [
+  "screenshots": [
     {
-      "name": "Schedule",
-      "url": "/schedule",
-      "description": "View match schedule"
-    },
-    {
-      "name": "Leaderboard",
-      "url": "/leaderboard",
-      "description": "View leaderboard"
+      "src": "/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow"
     }
   ],
-  "categories": ["sports", "games", "entertainment"]
+  "categories": ["sports", "social"],
+  "lang": "en"
 }

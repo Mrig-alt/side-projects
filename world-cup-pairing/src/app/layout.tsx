@@ -1,31 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Header from "@/components/layout/Header";
-import MobileNav from "@/components/layout/MobileNav";
 import { SessionProvider } from "next-auth/react";
-import Script from "next/script";
+import MobileNav from "@/components/layout/MobileNav";
+import PresenceTracker from "@/components/layout/PresenceTracker";
 
-const geist = Geist({ subsets: ["latin"] });
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
 
-export const dynamic = "force-dynamic";
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "IE World Cup 2026",
-  description: "Track your class pairings for World Cup 2026",
+  description: "Track matches, predict scores and find classmates watching together",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "WC 2026",
+    title: "WC2026",
   },
-  openGraph: {
-    title: "IE World Cup 2026",
-    description: "See who you're facing in each match",
-    type: "website",
-  },
-  icons: {
-    apple: "/icon-192.png",
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 
@@ -36,35 +36,30 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en">
       <head>
-        {/* iOS splash / PWA */}
-        <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="WC 2026" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <meta name="apple-mobile-web-app-title" content="WC2026" />
       </head>
-      <body className={geist.className}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 pb-20`}
+      >
         <SessionProvider>
-          <Header />
-          <main className="mx-auto max-w-5xl px-4 py-6 pb-24 md:pb-6">{children}</main>
+          <PresenceTracker />
+          <main className="mx-auto max-w-2xl px-4 py-6">
+            {children}
+          </main>
           <MobileNav />
         </SessionProvider>
-        {/* Register service worker */}
-        <Script id="register-sw" strategy="afterInteractive">
-          {`
-            if ('serviceWorker' in navigator) {
-              window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/sw.js')
-                  .then(function(reg) { console.log('SW registered:', reg.scope); })
-                  .catch(function(err) { console.log('SW failed:', err); });
-              });
-            }
-          `}
-        </Script>
       </body>
     </html>
   );

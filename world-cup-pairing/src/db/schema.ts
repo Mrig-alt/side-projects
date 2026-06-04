@@ -8,6 +8,7 @@ import {
   integer,
   timestamp,
   unique,
+  decimal,
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -110,6 +111,21 @@ export const groupMembers = pgTable(
   (t) => [unique().on(t.groupId, t.studentId)]
 );
 
+// ─── Venues ───────────────────────────────────────────────────────────────────
+
+export const venues = pgTable("venues", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 200 }).notNull(),
+  area: varchar("area", { length: 100 }),
+  address: varchar("address", { length: 300 }),
+  mapsUrl: varchar("maps_url", { length: 500 }),
+  lat: decimal("lat", { precision: 9, scale: 6 }),
+  lng: decimal("lng", { precision: 9, scale: 6 }),
+  isCustom: boolean("is_custom").notNull().default(false),
+  addedBy: uuid("added_by").references(() => students.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ─── Matches ──────────────────────────────────────────────────────────────────
 
 export const matches = pgTable("matches", {
@@ -210,6 +226,7 @@ export const watchInvites = pgTable("watch_invites", {
   matchId: uuid("match_id")
     .notNull()
     .references(() => matches.id, { onDelete: "cascade" }),
+  venueId: uuid("venue_id").references(() => venues.id, { onDelete: "set null" }),
   locationName: varchar("location_name", { length: 200 }),
   locationUrl: varchar("location_url", { length: 500 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -227,6 +244,7 @@ export type MatchVibe = typeof matchVibes.$inferSelect;
 export type WatchInvite = typeof watchInvites.$inferSelect;
 export type FriendGroup = typeof friendGroups.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
+export type Venue = typeof venues.$inferSelect;
 
 export type MatchStatus = (typeof matchStatusEnum.enumValues)[number];
 export type MatchStage = (typeof matchStageEnum.enumValues)[number];
