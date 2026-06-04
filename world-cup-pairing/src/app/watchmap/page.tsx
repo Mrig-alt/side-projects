@@ -43,16 +43,23 @@ export default async function WatchMapPage() {
   const teamMap = new Map(allTeams.map((t) => [t.id, t]));
 
   const allVenues = await db
-    .select({
-      id: venues.id,
-      name: venues.name,
-      area: venues.area,
-      mapsUrl: venues.mapsUrl,
-    })
+    .select({ id: venues.id, name: venues.name, area: venues.area, mapsUrl: venues.mapsUrl })
     .from(venues);
   const venueMap = new Map(allVenues.map((v) => [v.id, v]));
 
-  // ── Hottest matches ───────────────────────────────────────────────────────
+  // My existing watch plans (for logged-in user)
+  const myPlans = session?.user?.id
+    ? await db
+        .select({
+          matchId: watchInvites.matchId,
+          locationName: watchInvites.locationName,
+          venueId: watchInvites.venueId,
+        })
+        .from(watchInvites)
+        .where(eq(watchInvites.inviterId, session.user.id))
+    : [];
+
+  // ── Hottest matches
   const invitesByMatch = new Map<string, typeof allInvites>();
   for (const inv of allInvites) {
     if (!invitesByMatch.has(inv.matchId)) invitesByMatch.set(inv.matchId, []);
@@ -66,22 +73,13 @@ export default async function WatchMapPage() {
       const t1 = m.team1Id ? teamMap.get(m.team1Id) : null;
       const t2 = m.team2Id ? teamMap.get(m.team2Id) : null;
 
-      const venueCounts: Record<string, {
-        name: string;
-        url: string | null;
-        mapsUrl: string | null;
-        count: number;
-        people: string[];
-      }> = {};
-
+      const venueCounts: Record<string, { name: string; url: string | null; mapsUrl: string | null; count: number; people: string[] }> = {};
       for (const inv of invites) {
         const key = inv.venueId ?? inv.locationName ?? "Unknown";
         const linked = inv.venueId ? venueMap.get(inv.venueId) : null;
         const venueName = linked?.name ?? inv.locationName ?? "Unknown";
         const mapsUrl = linked?.mapsUrl ?? null;
-        if (!venueCounts[key]) {
-          venueCounts[key] = { name: venueName, url: inv.locationUrl ?? null, mapsUrl, count: 0, people: [] };
-        }
+        if (!venueCounts[key]) venueCounts[key] = { name: venueName, url: inv.locationUrl ?? null, mapsUrl, count: 0, people: [] };
         venueCounts[key].count++;
         venueCounts[key].people.push(inv.inviterName);
       }
@@ -102,36 +100,21 @@ export default async function WatchMapPage() {
     })
     .sort((a, b) => b.totalPeople - a.totalPeople);
 
-  // ── Top bars ──────────────────────────────────────────────────────────────
+  // ── Top bars
   const barCounts: Record<string, {
-    venueId: string | null;
-    name: string;
-    area: string | null;
-    mapsUrl: string | null;
+    venueId: string | null; name: string; area: string | null; mapsUrl: string | null;
     totalPeople: number;
-    byMatch: {
-      matchId: string;
-      team1Name: string;
-      team2Name: string;
-      team1Flag: string;
-      team2Flag: string;
-      matchDatetime: string;
-      people: string[];
-    }[];
+    byMatch: { matchId: string; team1Name: string; team2Name: string; team1Flag: string; team2Flag: string; matchDatetime: string; people: string[] }[];
   }> = {};
 
   for (const inv of allInvites) {
     const key = inv.venueId ?? inv.locationName ?? "Unknown";
     const linked = inv.venueId ? venueMap.get(inv.venueId) : null;
     const name = linked?.name ?? inv.locationName ?? "Unknown";
-    const area = linked?.area ?? null;       // null-safe: area may not be set
-    const mapsUrl = linked?.mapsUrl ?? null; // null-safe: mapsUrl may not be set
-
-    if (!barCounts[key]) {
-      barCounts[key] = { venueId: inv.venueId ?? null, name, area, mapsUrl, totalPeople: 0, byMatch: [] };
-    }
+    const area = linked?.area ?? null;
+    const mapsUrl = linked?.mapsUrl ?? null;
+    if (!barCounts[key]) barCounts[key] = { venueId: inv.venueId ?? null, name, area, mapsUrl, totalPeople: 0, byMatch: [] };
     barCounts[key].totalPeople++;
-
     const match = allMatches.find((m) => m.id === inv.matchId);
     if (match) {
       const t1 = match.team1Id ? teamMap.get(match.team1Id) : null;
@@ -155,16 +138,32 @@ export default async function WatchMapPage() {
 
   const topBars = Object.values(barCounts)
     .sort((a, b) => b.totalPeople - a.totalPeople)
-    .map((bar) => ({
-      ...bar,
-      byMatch: bar.byMatch.sort((a, b) => b.people.length - a.people.length),
-    }));
+    .map((bar) => ({ ...bar, byMatch: bar.byMatch.sort((a, b) => b.people.length - a.people.length) }));
+
+  // Shape matches for the update sheet
+  const matchesForSheet = allMatches
+    .filter((m) => m.status === "upcoming" || m.status === "live")
+    .map((m) => {
+      const t1 = m.team1Id ? teamMap.get(m.team1Id) : null;
+      const t2 = m.team2Id ? teamMap.get(m.team2Id) : null;
+      return {
+        id: m.id,
+        team1Name: t1?.name ?? m.team1Placeholder ?? "TBD",
+        team2Name: t2?.name ?? m.team2Placeholder ?? "TBD",
+        team1Flag: t1?.flagEmoji ?? "🏳️",
+        team2Flag: t2?.flagEmoji ?? "🏳️",
+        matchDatetime: m.matchDatetime.toISOString(),
+      };
+    });
 
   return (
     <WatchMapClient
       hottestMatches={hottestMatches}
       topBars={topBars}
       currentUserId={session?.user?.id ?? null}
+      matchesForSheet={matchesForSheet}
+      venuesForSheet={allVenues}
+      myPlans={myPlans}
     />
   );
 }

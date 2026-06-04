@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { MapPin, Flame, ExternalLink, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import UpdateWatchPlanSheet from "./UpdateWatchPlanSheet";
+import LiveReportsWidget from "./LiveReportsWidget";
 
 function formatMatchTime(iso: string) {
   const d = new Date(iso);
@@ -12,65 +14,66 @@ function formatMatchTime(iso: string) {
 }
 
 type HottestMatch = {
-  matchId: string;
-  matchDatetime: string;
-  stage: string;
-  groupName: string | null;
-  status: string;
-  team1Name: string;
-  team2Name: string;
-  team1Flag: string;
-  team2Flag: string;
+  matchId: string; matchDatetime: string; stage: string; groupName: string | null;
+  status: string; team1Name: string; team2Name: string; team1Flag: string; team2Flag: string;
   totalPeople: number;
   venueBreakdown: { name: string; url: string | null; mapsUrl: string | null; count: number; people: string[] }[];
 };
 
 type TopBar = {
-  venueId: string | null;
-  name: string;
-  area: string | null;
-  mapsUrl: string | null;
+  venueId: string | null; name: string; area: string | null; mapsUrl: string | null;
   totalPeople: number;
   byMatch: { matchId: string; team1Name: string; team2Name: string; team1Flag: string; team2Flag: string; matchDatetime: string; people: string[] }[];
 };
 
+type MatchForSheet = { id: string; team1Name: string; team2Name: string; team1Flag: string; team2Flag: string; matchDatetime: string };
+type VenueForSheet = { id: string; name: string; area: string | null; mapsUrl: string | null };
+type MyPlan = { matchId: string; locationName: string | null; venueId: string | null };
+
 export default function WatchMapClient({
-  hottestMatches,
-  topBars,
-  currentUserId,
+  hottestMatches, topBars, currentUserId,
+  matchesForSheet, venuesForSheet, myPlans,
 }: {
   hottestMatches: HottestMatch[];
   topBars: TopBar[];
   currentUserId: string | null;
+  matchesForSheet: MatchForSheet[];
+  venuesForSheet: VenueForSheet[];
+  myPlans: MyPlan[];
 }) {
   const [tab, setTab] = useState<"matches" | "bars">("matches");
   const [expandedBar, setExpandedBar] = useState<string | null>(null);
   const [expandedMatch, setExpandedMatch] = useState<string | null>(null);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Where to Watch 📍</h1>
         <p className="text-sm text-gray-500 mt-1">See where classmates are heading for each match</p>
       </div>
 
+      {/* Update my plan */}
+      {currentUserId && (
+        <UpdateWatchPlanSheet
+          matches={matchesForSheet}
+          venues={venuesForSheet}
+          existingPlans={myPlans}
+        />
+      )}
+
       {/* Toggle tabs */}
       <div className="flex rounded-xl bg-gray-100 p-1 gap-1">
         <button
           onClick={() => setTab("matches")}
-          className={cn(
-            "flex-1 rounded-lg py-2 text-sm font-semibold transition-all",
-            tab === "matches" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
-          )}
+          className={cn("flex-1 rounded-lg py-2 text-sm font-semibold transition-all",
+            tab === "matches" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700")}
         >
           🔥 Hottest Matches
         </button>
         <button
           onClick={() => setTab("bars")}
-          className={cn(
-            "flex-1 rounded-lg py-2 text-sm font-semibold transition-all",
-            tab === "bars" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
-          )}
+          className={cn("flex-1 rounded-lg py-2 text-sm font-semibold transition-all",
+            tab === "bars" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700")}
         >
           🍺 Top Bars
         </button>
@@ -87,15 +90,13 @@ export default function WatchMapClient({
           )}
           {hottestMatches.map((m, i) => (
             <div key={m.matchId} className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-              <button
-                className="w-full text-left px-4 py-3"
-                onClick={() => setExpandedMatch(expandedMatch === m.matchId ? null : m.matchId)}
-              >
+              <button className="w-full text-left px-4 py-3"
+                onClick={() => setExpandedMatch(expandedMatch === m.matchId ? null : m.matchId)}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {i === 0 && <span className="text-base">🥇</span>}
-                    {i === 1 && <span className="text-base">🥈</span>}
-                    {i === 2 && <span className="text-base">🥉</span>}
+                    {i === 0 && <span>🥇</span>}
+                    {i === 1 && <span>🥈</span>}
+                    {i === 2 && <span>🥉</span>}
                     {i > 2 && <span className="text-sm font-bold text-gray-400">#{i + 1}</span>}
                     <div>
                       <div className="font-semibold text-gray-900 text-sm">
@@ -106,13 +107,11 @@ export default function WatchMapClient({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="flex items-center gap-1 text-sm font-bold text-green-600">
-                      <Users className="h-4 w-4" />
-                      {m.totalPeople}
+                      <Users className="h-4 w-4" />{m.totalPeople}
                     </span>
                     {expandedMatch === m.matchId ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                   </div>
                 </div>
-                {/* Top venue preview when collapsed */}
                 {expandedMatch !== m.matchId && m.venueBreakdown[0] && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
                     <MapPin className="h-3 w-3 text-green-500" />
@@ -120,8 +119,6 @@ export default function WatchMapClient({
                   </div>
                 )}
               </button>
-
-              {/* Expanded venue breakdown */}
               {expandedMatch === m.matchId && (
                 <div className="border-t border-gray-50 px-4 pb-3 pt-2 space-y-2">
                   {m.venueBreakdown.map((v) => (
@@ -159,15 +156,13 @@ export default function WatchMapClient({
           )}
           {topBars.map((bar, i) => (
             <div key={bar.name} className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-              <button
-                className="w-full text-left px-4 py-3"
-                onClick={() => setExpandedBar(expandedBar === bar.name ? null : bar.name)}
-              >
+              <button className="w-full text-left px-4 py-3"
+                onClick={() => setExpandedBar(expandedBar === bar.name ? null : bar.name)}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {i === 0 && <span className="text-base">🥇</span>}
-                    {i === 1 && <span className="text-base">🥈</span>}
-                    {i === 2 && <span className="text-base">🥉</span>}
+                    {i === 0 && <span>🥇</span>}
+                    {i === 1 && <span>🥈</span>}
+                    {i === 2 && <span>🥉</span>}
                     {i > 2 && <span className="text-sm font-bold text-gray-400">#{i + 1}</span>}
                     <div>
                       <div className="font-semibold text-gray-900 text-sm flex items-center gap-1.5">
@@ -183,15 +178,12 @@ export default function WatchMapClient({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="flex items-center gap-1 text-sm font-bold text-green-600">
-                      <Users className="h-4 w-4" />
-                      {bar.totalPeople}
+                      <Users className="h-4 w-4" />{bar.totalPeople}
                     </span>
                     {expandedBar === bar.name ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                   </div>
                 </div>
               </button>
-
-              {/* Expanded: which matches people are watching here */}
               {expandedBar === bar.name && (
                 <div className="border-t border-gray-50 px-4 pb-3 pt-2 space-y-3">
                   {bar.byMatch.map((bm) => (
@@ -213,6 +205,14 @@ export default function WatchMapClient({
           ))}
         </div>
       )}
+
+      {/* Live Reports section — always shown below */}
+      <div className="border-t border-gray-100 pt-4">
+        <LiveReportsWidget
+          currentUserId={currentUserId}
+          knownVenues={venuesForSheet.map((v) => ({ id: v.id, name: v.name, area: v.area }))}
+        />
+      </div>
     </div>
   );
 }
