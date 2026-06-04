@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { matches, teams, students, predictions, watchInvites } from "@/db/schema";
 import { eq, and, gte, lte, asc, inArray } from "drizzle-orm";
 import TodayHero from "@/components/matches/TodayHero";
-import MatchCard from "@/components/matches/MatchCard";
+import MatchCardClient from "@/components/matches/MatchCardClient";
 import JoinBanner from "@/components/home/JoinBanner";
 
 export const dynamic = "force-dynamic";
@@ -91,12 +91,14 @@ export default async function HomePage() {
                   ? allStudents.filter((s) => s.teamId === match.team2Id && s.visibility !== "stealth")
                   : [];
 
+                // Server-side predictions only available if auth() worked;
+                // MatchCardClient will also re-check client-side for personalised actions.
                 const myPred = myPredictions.find((p) => p.matchId === match.id);
                 const myInvite = todayInvites.find((i) => i.matchId === match.id && i.inviterId === validSession?.user.id);
 
                 const myTeamId = validSession?.user.teamId;
-                const isOnTeam1 = myTeamId !== null && myTeamId !== undefined && myTeamId === match.team1Id;
-                const isOnTeam2 = myTeamId !== null && myTeamId !== undefined && myTeamId === match.team2Id;
+                const isOnTeam1 = myTeamId != null && myTeamId === match.team1Id;
+                const isOnTeam2 = myTeamId != null && myTeamId === match.team2Id;
                 const opponentSupporters = isOnTeam1 ? team2Supporters : isOnTeam2 ? team1Supporters : [];
                 const opponentIds = opponentSupporters.map((s) => s.id);
                 const opponentInviteRaw = todayInvites.find((i) => i.matchId === match.id && opponentIds.includes(i.inviterId));
@@ -109,13 +111,11 @@ export default async function HomePage() {
                 };
 
                 return (
-                  <MatchCard
+                  <MatchCardClient
                     key={match.id}
-                    match={fullMatch as Parameters<typeof MatchCard>[0]["match"]}
+                    match={fullMatch as Parameters<typeof MatchCardClient>[0]["match"]}
                     team1Supporters={team1Supporters.map((s) => ({ id: s.id, name: s.name, lastSeenAt: s.lastSeenAt }))}
                     team2Supporters={team2Supporters.map((s) => ({ id: s.id, name: s.name, lastSeenAt: s.lastSeenAt }))}
-                    currentUserId={validSession?.user.id}
-                    currentUserTeamId={validSession?.user.teamId}
                     prediction={myPred ? { predictedScore1: myPred.predictedScore1, predictedScore2: myPred.predictedScore2 } : null}
                     myWatchInvite={myInvite ? { locationName: myInvite.locationName ?? "", locationUrl: myInvite.locationUrl } : null}
                     opponentWatchInvite={

@@ -4,7 +4,6 @@ import { useSession, signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import VisibilitySelector from "@/components/profile/VisibilitySelector";
 
 type Visibility = "public" | "friends" | "stealth";
@@ -90,11 +89,11 @@ export default function AccountPage() {
         </a>
       </div>
 
-      {/* Sign out — redirect to / not /join to avoid NEXTAUTH_URL callbackUrl mismatch */}
+      {/* Sign out — no callbackUrl so NextAuth uses its default (signIn page = /join) */}
       <Button
         variant="outline"
         className="w-full text-red-600 border-red-200 hover:bg-red-50"
-        onClick={() => signOut({ callbackUrl: "/" })}
+        onClick={() => signOut()}
       >
         Sign out
       </Button>
