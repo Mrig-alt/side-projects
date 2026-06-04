@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import TeamGrid from "@/components/teams/TeamGrid";
 import VisibilitySelector from "@/components/profile/VisibilitySelector";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,14 @@ function JoinPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/";
+  const { data: session, status } = useSession();
+
+  // If already logged in, skip the join form entirely
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace(next);
+    }
+  }, [status, router, next]);
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [step, setStep] = useState<"identity" | "team" | "visibility">("identity");
@@ -144,6 +152,15 @@ function JoinPageInner() {
     }
   };
 
+  // Show a spinner while session is loading or while redirecting authenticated users
+  if (status === "loading" || status === "authenticated") {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div className="text-center">
@@ -165,7 +182,7 @@ function JoinPageInner() {
               onChange={(e) => { setEmail(e.target.value); setError(""); }}
               placeholder="maria@student.ie.edu"
               className="pr-8"
-              autoComplete="email"
+              autoComplete="off"
             />
             {mode === "checking" && (
               <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-gray-400" />
@@ -192,19 +209,18 @@ function JoinPageInner() {
                 value={pin}
                 onChange={(e) => { setPin(e.target.value); setError(""); }}
                 placeholder="Enter class PIN"
-                autoComplete="current-password"
+                autoComplete="off"
                 onKeyDown={(e) => e.key === "Enter" && pin.trim() && handleSignIn()}
               />
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
-            {/* Disabled until PIN is entered */}
             <Button className="w-full" disabled={loading || !pin.trim()} onClick={handleSignIn}>
               {loading ? "Signing in..." : "Sign in \u2192"}
             </Button>
           </div>
         )}
 
-        {/* NEW USER \u2014 step 1 */}
+        {/* NEW USER — step 1 */}
         {mode === "new" && step === "identity" && (
           <div className="space-y-4">
             <p className="text-sm text-gray-500">New here \u2014 let&apos;s get you set up \uD83C\uDF89</p>
@@ -214,7 +230,8 @@ function JoinPageInner() {
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Mar\uED\uB0\uAC Garc\uED\uB0\uADa"
+                placeholder="Mar\u00EDa Garc\u00EDa"
+                autoComplete="off"
               />
             </div>
             <div className="grid gap-1.5">
@@ -224,6 +241,7 @@ function JoinPageInner() {
                 value={nationality}
                 onChange={(e) => setNationality(e.target.value)}
                 placeholder="Spanish"
+                autoComplete="off"
               />
             </div>
             {pinRequired && (
@@ -235,6 +253,7 @@ function JoinPageInner() {
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
                   placeholder="Enter class PIN"
+                  autoComplete="off"
                 />
               </div>
             )}
@@ -250,7 +269,7 @@ function JoinPageInner() {
         )}
       </div>
 
-      {/* NEW USER \u2014 step 2: pick team */}
+      {/* NEW USER — step 2: pick team */}
       {mode === "new" && step === "team" && (
         <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
@@ -283,7 +302,7 @@ function JoinPageInner() {
         </div>
       )}
 
-      {/* NEW USER \u2014 step 3: privacy */}
+      {/* NEW USER — step 3: privacy */}
       {mode === "new" && step === "visibility" && (
         <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm space-y-4">
           <h2 className="font-semibold text-gray-900">Privacy mode</h2>
