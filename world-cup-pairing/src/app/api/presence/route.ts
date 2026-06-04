@@ -8,10 +8,13 @@ export async function POST() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const userId = session.user?.id;
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   await db
     .update(students)
     .set({ lastSeenAt: new Date() })
-    .where(eq(students.id, session.user.id));
+    .where(eq(students.id, userId));
 
   return NextResponse.json({ ok: true });
 }
