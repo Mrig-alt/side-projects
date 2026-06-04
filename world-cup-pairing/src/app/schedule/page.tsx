@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { matches, teams, students, predictions, watchInvites } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, inArray } from "drizzle-orm";
 import MatchCard from "@/components/matches/MatchCard";
 import { stageLabel, formatMatchDate } from "@/lib/utils";
 
@@ -43,18 +43,21 @@ export default async function SchedulePage() {
       ? await db.select().from(predictions).where(eq(predictions.studentId, validSession.user.id))
       : [];
 
-    const allInvites = validSession
-      ? await db
-          .select({
-            id: watchInvites.id,
-            matchId: watchInvites.matchId,
-            inviterId: watchInvites.inviterId,
-            venueId: watchInvites.venueId,
-            locationName: watchInvites.locationName,
-            locationUrl: watchInvites.locationUrl,
-          })
-          .from(watchInvites)
-      : [];
+    const allMatchIds = allMatches.map((m) => m.id);
+    const allInvites =
+      validSession && allMatchIds.length > 0
+        ? await db
+            .select({
+              id: watchInvites.id,
+              matchId: watchInvites.matchId,
+              inviterId: watchInvites.inviterId,
+              venueId: watchInvites.venueId,
+              locationName: watchInvites.locationName,
+              locationUrl: watchInvites.locationUrl,
+            })
+            .from(watchInvites)
+            .where(inArray(watchInvites.matchId, allMatchIds))
+        : [];
 
     const grouped = new Map<string, typeof allMatches>();
     for (const m of allMatches) {
