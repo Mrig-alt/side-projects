@@ -38,7 +38,6 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
       db.select({ id: venues.id, name: venues.name, area: venues.area, mapsUrl: venues.mapsUrl }).from(venues),
       db.select({ id: matchReactions.id, emoji: matchReactions.emoji, matchMinute: matchReactions.matchMinute, createdAt: matchReactions.createdAt, studentId: matchReactions.studentId })
         .from(matchReactions).where(eq(matchReactions.matchId, id)).orderBy(asc(matchReactions.createdAt)),
-      // Fetch current user’s prediction for this match
       session?.user?.id
         ? db.select().from(predictions).where(and(eq(predictions.studentId, session.user.id), eq(predictions.matchId, id))).limit(1)
         : Promise.resolve([]),
@@ -77,8 +76,10 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   const t1Name = team1?.name ?? match.team1Placeholder ?? "TBD";
   const t2Name = team2?.name ?? match.team2Placeholder ?? "TBD";
 
-  const existingPrediction = myPrediction[0] ?? null;
+  const existingPrediction = (myPrediction as Array<typeof myPrediction[0]>)[0] ?? null;
   const canPredict = !!session?.user?.id && isUpcoming && !!team1 && !!team2;
+  // URL to send logged-out users back here after login
+  const loginReturnUrl = `/join?next=/matches/${id}`;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -119,11 +120,11 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
         </div>
       </div>
 
-      {/* Prediction card — shown for all logged-in users on upcoming matches */}
+      {/* Prediction card */}
       {canPredict && (
         <div className="rounded-2xl border border-green-100 bg-green-50 p-4 shadow-sm">
           <p className="text-sm font-semibold text-green-800 mb-3">
-            🏆 {existingPrediction ? "Your prediction (tap to update)" : "Predict the score — earn tokens!"}
+            🏆 {existingPrediction ? "Your prediction — tap to update" : "Predict the score — earn tokens!"}
           </p>
           <PredictionForm
             matchId={id}
@@ -132,14 +133,17 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
             existing={existingPrediction ? { predictedScore1: existingPrediction.predictedScore1, predictedScore2: existingPrediction.predictedScore2 } : null}
             locked={false}
           />
-          <p className="text-xs text-green-700 mt-2">
-            Exact score → +15 tokens · Correct result → +5 tokens
-          </p>
+          <p className="text-xs text-green-700 mt-2">Exact score → +15 tokens · Correct result → +5 tokens</p>
         </div>
       )}
+
+      {/* Logged-out CTA — sends back here after login */}
       {!session?.user?.id && isUpcoming && team1 && team2 && (
         <div className="rounded-2xl border border-gray-100 bg-white p-4 text-center text-sm text-gray-500">
-          <Link href="/join" className="text-green-600 font-medium hover:underline">Join the class</Link> to predict scores and earn tokens
+          <Link href={loginReturnUrl} className="text-green-600 font-medium hover:underline">
+            Join the class
+          </Link>{" "}
+          to predict scores and earn tokens
         </div>
       )}
 
@@ -188,7 +192,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
           <ReactionTimeline matchId={id} reactions={enrichedReactions} isLive={isLive} />
         ) : (
           <div className="rounded-xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-400">
-            <Link href="/join" className="text-green-600 font-medium hover:underline">Join the class</Link> to drop reactions
+            <Link href={loginReturnUrl} className="text-green-600 font-medium hover:underline">Join the class</Link> to drop reactions
           </div>
         )}
       </section>

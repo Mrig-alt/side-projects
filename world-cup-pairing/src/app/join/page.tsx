@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import TeamGrid from "@/components/teams/TeamGrid";
 import VisibilitySelector from "@/components/profile/VisibilitySelector";
@@ -36,6 +36,10 @@ function formatError(error: unknown): string {
 
 export default function JoinPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // ?next= lets any page send the user back after login (e.g. /matches/abc)
+  const next = searchParams.get("next") ?? "/";
+
   const [teams, setTeams] = useState<Team[]>([]);
   const [step, setStep] = useState<"identity" | "team" | "visibility">("identity");
 
@@ -53,7 +57,6 @@ export default function JoinPage() {
   const [visibility, setVisibility] = useState<Visibility>("public");
   const [studentCount, setStudentCount] = useState<number | null>(null);
 
-  // Whether PIN is required (env-driven — detected via a lightweight probe)
   const [pinRequired, setPinRequired] = useState(false);
   const [pin, setPin] = useState("");
 
@@ -63,7 +66,6 @@ export default function JoinPage() {
       .then((d) => {
         setTeams(d.teams ?? []);
         setStudentCount(d.count ?? null);
-        // Server tells us if PIN is enforced
         setPinRequired(!!d.pinRequired);
       });
   }, []);
@@ -104,7 +106,8 @@ export default function JoinPage() {
     });
     setLoading(false);
     if (result?.ok) {
-      router.push("/");
+      // Go back to wherever the user came from, or home
+      router.push(next);
     } else {
       setError(pinRequired ? "Wrong PIN — ask whoever set up the app for the class PIN." : "Sign in failed — please try again.");
     }
@@ -134,7 +137,7 @@ export default function JoinPage() {
         pin: pin || "",
         redirect: false,
       });
-      if (result?.ok) router.push("/");
+      if (result?.ok) router.push(next);
       else setError("Registered! But auto-login failed — try signing in again.");
     } catch {
       setError("Network error — please try again");

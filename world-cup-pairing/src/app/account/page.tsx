@@ -82,11 +82,11 @@ export default function AccountPage() {
         </a>
       </div>
 
-      {/* Sign out */}
+      {/* Sign out — always lands on /join, never loops back */}
       <Button
         variant="outline"
         className="w-full text-red-600 border-red-200 hover:bg-red-50"
-        onClick={() => signOut({ callbackUrl: "/" })}
+        onClick={() => signOut({ callbackUrl: "/join" })}
       >
         Sign out
       </Button>
