@@ -7,7 +7,11 @@ import { Trophy, Coins } from "lucide-react";
 
 export default function Header() {
   const { data: session } = useSession();
-  const [liveTokens, setLiveTokens] = useState<number | null>(null);
+
+  // Seed from JWT so we never flash 0 — overwritten immediately by the live fetch
+  const [liveTokens, setLiveTokens] = useState<number | null>(
+    session?.user?.tokenBalance ?? null
+  );
 
   const fetchTokens = useCallback(() => {
     if (!session?.user?.id) { setLiveTokens(null); return; }
@@ -20,12 +24,23 @@ export default function Header() {
   // Fetch on mount and when user changes
   useEffect(() => { fetchTokens(); }, [fetchTokens]);
 
+  // Re-seed from session whenever it changes (e.g. after router.refresh())
+  useEffect(() => {
+    if (session?.user?.tokenBalance != null) {
+      setLiveTokens((prev) =>
+        // Only update from session if we don't already have a live value
+        prev === null ? session.user.tokenBalance : prev
+      );
+    }
+  }, [session?.user?.tokenBalance]);
+
   // Re-fetch whenever a prediction or bet fires the 'token-refresh' event
   useEffect(() => {
     window.addEventListener("token-refresh", fetchTokens);
     return () => window.removeEventListener("token-refresh", fetchTokens);
   }, [fetchTokens]);
 
+  // Always prefer the live DB value; fall back to session JWT only if fetch hasn't resolved yet
   const displayTokens = liveTokens ?? session?.user?.tokenBalance ?? 0;
 
   return (
