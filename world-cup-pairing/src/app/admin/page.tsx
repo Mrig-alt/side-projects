@@ -8,23 +8,29 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  // FIX: auth via session cookie instead of URL query param.
-  // The old ?key= approach leaked the secret to server logs, browser history,
-  // and Referer headers on every outbound link click.
+  // Auth via session — no ?key= URL param (leaks to logs/Referer/history)
   const session = await auth();
   const adminEmail = process.env.ADMIN_EMAIL;
 
+  // FIX: session.user.email now exists on the Session type and is populated
+  // by the session callback. Falls back to blocking if ADMIN_EMAIL is unset.
   if (!session?.user?.id || !adminEmail || session.user.email !== adminEmail) {
     redirect("/");
   }
 
   const rows = await db
     .select({
-      id: students.id, name: students.name, email: students.email,
-      nationality: students.nationality, visibility: students.visibility,
-      tokenBalance: students.tokenBalance, isHonoraryFan: students.isHonoraryFan,
-      flagged: students.flagged, createdAt: students.createdAt,
-      teamName: teams.name, teamFlag: teams.flagEmoji,
+      id: students.id,
+      name: students.name,
+      email: students.email,
+      nationality: students.nationality,
+      visibility: students.visibility,
+      tokenBalance: students.tokenBalance,
+      isHonoraryFan: students.isHonoraryFan,
+      flagged: students.flagged,
+      createdAt: students.createdAt,
+      teamName: teams.name,
+      teamFlag: teams.flagEmoji,
     })
     .from(students)
     .leftJoin(teams, eq(students.teamId, teams.id))
@@ -41,7 +47,6 @@ export default async function AdminPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-        {/* FIX: export link now goes to session-authenticated endpoint */}
         <Link
           href="/api/admin/export"
           className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -71,11 +76,17 @@ export default async function AdminPage() {
         <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-              <tr><th className="px-4 py-2 text-left">Team</th><th className="px-4 py-2 text-right">Count</th></tr>
+              <tr>
+                <th className="px-4 py-2 text-left">Team</th>
+                <th className="px-4 py-2 text-right">Count</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {sorted.map(([name, count]) => (
-                <tr key={name}><td className="px-4 py-2 text-gray-700">{name}</td><td className="px-4 py-2 text-right font-medium">{count}</td></tr>
+                <tr key={name}>
+                  <td className="px-4 py-2 text-gray-700">{name}</td>
+                  <td className="px-4 py-2 text-right font-medium">{count}</td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -93,6 +104,7 @@ export default async function AdminPage() {
                 <th className="px-3 py-2 text-left">Team</th>
                 <th className="px-3 py-2 text-left">Mode</th>
                 <th className="px-3 py-2 text-right">Tokens</th>
+                <th className="px-3 py-2 text-left">Flagged</th>
                 <th className="px-3 py-2 text-left">Joined</th>
               </tr>
             </thead>
@@ -110,7 +122,12 @@ export default async function AdminPage() {
                     }`}>{s.visibility}</span>
                   </td>
                   <td className="px-3 py-2 text-right">{s.tokenBalance}</td>
-                  <td className="px-3 py-2 text-gray-400 whitespace-nowrap text-xs">{new Date(s.createdAt).toLocaleDateString()}</td>
+                  <td className="px-3 py-2">
+                    {s.flagged && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">flagged</span>}
+                  </td>
+                  <td className="px-3 py-2 text-gray-400 whitespace-nowrap text-xs">
+                    {new Date(s.createdAt).toLocaleDateString()}
+                  </td>
                 </tr>
               ))}
             </tbody>
