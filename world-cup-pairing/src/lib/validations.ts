@@ -7,8 +7,8 @@ export const registerSchema = z.object({
     (v) => (typeof v === "string" && v.trim().length < 2 ? undefined : v),
     z.string().max(100).optional()
   ),
-  teamId: z.string().uuid("Invalid team").optional(),
-  isHonoraryFan: z.boolean().optional(),
+  teamId: z.string().uuid("Invalid team").optional().nullable(),
+  isHonoraryFan: z.boolean().optional().nullable(),
   visibility: z.enum(["public", "friends", "stealth"]).default("public"),
   pin: z.string().min(1, "Class PIN is required"),
 });
