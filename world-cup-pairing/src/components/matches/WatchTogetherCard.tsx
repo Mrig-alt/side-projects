@@ -19,6 +19,7 @@ type WatchLocation = {
   locationUrl: string | null;
   venueId: string | null;
   people: string[];
+  inviterIds: string[];
 };
 
 export default function WatchTogetherCard({ matchId }: { matchId: string }) {
@@ -33,7 +34,6 @@ export default function WatchTogetherCard({ matchId }: { matchId: string }) {
   const [isCustom, setIsCustom] = useState(false);
   const [loading, setLoading] = useState(false);
   const [myLocation, setMyLocation] = useState<string | null>(null);
-  const [groupBy, setGroupBy] = useState<Record<string, string[]>>({});
 
   const fetchLocations = async () => {
     const res = await fetch(`/api/watch-together?matchId=${matchId}`);
@@ -41,7 +41,7 @@ export default function WatchTogetherCard({ matchId }: { matchId: string }) {
     setLocations(data.locations ?? []);
     if (session) {
       const mine = (data.locations ?? []).find((l: WatchLocation) =>
-        l.people.includes(session.user.name)
+        l.inviterIds.includes(session.user.id)
       );
       setMyLocation(mine?.locationName ?? null);
     }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Calendar, Trophy, Users, MapPin } from "lucide-react";
+import { Home, Calendar, Trophy, Users, MapPin, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { href: "/schedule", icon: Calendar, label: "Schedule" },
   { href: "/watchmap", icon: MapPin, label: "Watch" },
   { href: "/students", icon: Users, label: "Classmates" },
+  { href: "/friends", icon: UsersRound, label: "Groups" },
   { href: "/leaderboard", icon: Trophy, label: "Tokens" },
 ];
 

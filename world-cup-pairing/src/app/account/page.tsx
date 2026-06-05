@@ -48,6 +48,7 @@ export default function AccountPage() {
       });
       if (res.ok) {
         await update({ visibility });
+        router.refresh();
         setSaved(true);
       }
     } finally {

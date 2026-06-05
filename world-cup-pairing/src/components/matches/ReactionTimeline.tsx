@@ -32,7 +32,7 @@ export default function ReactionTimeline({ matchId, reactions: initial, isLive }
         body: JSON.stringify({
           matchId,
           emoji,
-          matchMinute: minute ? parseInt(minute) : null,
+          matchMinute: minute ? parseInt(minute) : undefined,
         }),
       });
       if (res.ok) {

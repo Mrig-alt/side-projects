@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     .where(eq(watchInvites.matchId, matchId));
 
   // Group by venueId if set, otherwise fall back to locationName string
-  const locations: Record<string, { locationName: string; locationUrl: string | null; venueId: string | null; people: string[] }> = {};
+  const locations: Record<string, { locationName: string; locationUrl: string | null; venueId: string | null; people: string[]; inviterIds: string[] }> = {};
   for (const inv of invites) {
     const key = inv.venueId ?? inv.locationName ?? "Unknown";
     if (!locations[key]) {
@@ -34,9 +34,11 @@ export async function GET(req: Request) {
         locationUrl: inv.locationUrl ?? null,
         venueId: inv.venueId ?? null,
         people: [],
+        inviterIds: [],
       };
     }
     locations[key].people.push(inv.inviterName);
+    locations[key].inviterIds.push(inv.inviterId);
   }
 
   return NextResponse.json({ locations: Object.values(locations) });

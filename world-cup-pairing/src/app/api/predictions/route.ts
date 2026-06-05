@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { predictions, matches, bets } from "@/db/schema";
+import { predictions, matches } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { predictionSchema } from "@/lib/validations";
 import { STAKE_TOKENS } from "@/lib/tokens";

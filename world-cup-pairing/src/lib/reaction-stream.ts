@@ -18,7 +18,3 @@ export function broadcast(payload: object) {
     try { write(data); } catch { removeClient(write); }
   });
 }
-
-export function clientCount() {
-  return clients.size;
-}

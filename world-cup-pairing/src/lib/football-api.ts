@@ -24,6 +24,12 @@ export async function fetchWCMatches(): Promise<ApiMatch[]> {
     next: { revalidate: 60 },
   });
 
+  if (res.status === 429) {
+    const retryAfter = res.headers.get("X-RequestCounter-Reset") ?? "60";
+    console.error(`football-data.org rate-limited; retry after ${retryAfter}s`);
+    throw new Error(`rate-limited:${retryAfter}`);
+  }
+
   if (!res.ok) {
     console.error("football-data.org error", res.status, await res.text());
     return [];

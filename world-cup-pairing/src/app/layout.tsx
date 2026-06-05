@@ -46,10 +46,6 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="apple-touch-icon" href="/icon-192.png" />
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="WC2026" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 pb-20`}

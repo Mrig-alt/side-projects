@@ -30,7 +30,7 @@ export default async function LeaderboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Token Leaderboard 🏆</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Earn tokens from match bets (+20 per win) and predictions (+5 correct, +15 exact)
+            Earn tokens from predictions — +5 correct result, +15 exact score
           </p>
         </div>
 
