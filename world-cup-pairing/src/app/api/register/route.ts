@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { students, teams } from "@/db/schema";
-import { eq, count, sql } from "drizzle-orm";
+import { students, teams, matches, bets } from "@/db/schema";
+import { eq, count, sql, and, or } from "drizzle-orm";
 import { registerSchema } from "@/lib/validations";
 import {
   PUBLIC_BONUS_TOKENS,
@@ -107,6 +107,39 @@ export async function POST(req: Request) {
       tokenBalance,
     })
     .returning();
+
+  // Auto-create bets vs every existing student on the opposing team for each upcoming match.
+  // onConflictDoNothing ensures idempotency in case of retries.
+  if (student.teamId) {
+    const upcomingPaired = await db
+      .select({ id: matches.id, team1Id: matches.team1Id, team2Id: matches.team2Id })
+      .from(matches)
+      .where(
+        and(
+          eq(matches.status, "upcoming"),
+          or(eq(matches.team1Id, student.teamId), eq(matches.team2Id, student.teamId))
+        )
+      );
+
+    for (const match of upcomingPaired) {
+      const opposingTeamId = match.team1Id === student.teamId ? match.team2Id : match.team1Id;
+      if (!opposingTeamId) continue;
+
+      const opponents = await db
+        .select({ id: students.id })
+        .from(students)
+        .where(and(eq(students.teamId, opposingTeamId), eq(students.flagged, false)));
+
+      if (opponents.length === 0) continue;
+
+      const betValues = opponents.map((opp) => ({
+        matchId: match.id,
+        student1Id: match.team1Id === student.teamId ? student.id : opp.id,
+        student2Id: match.team2Id === student.teamId ? student.id : opp.id,
+      }));
+      await db.insert(bets).values(betValues).onConflictDoNothing();
+    }
+  }
 
   return NextResponse.json({ student }, { status: 201 });
 }

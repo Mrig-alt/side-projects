@@ -28,6 +28,13 @@ export default function Header() {
     return () => window.removeEventListener("token-refresh", fetchTokens);
   }, [fetchTokens]);
 
+  // Poll every 30s so settled tokens (from server-side score sync) appear without a page reload
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const id = setInterval(fetchTokens, 30_000);
+    return () => clearInterval(id);
+  }, [session?.user?.id, fetchTokens]);
+
   const displayTokens = liveTokens ?? session?.user?.tokenBalance ?? 0;
 
   return (
