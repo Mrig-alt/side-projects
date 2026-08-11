@@ -62,6 +62,23 @@ export const projects: Project[] = [
     ],
   },
   {
+    slug: "vigniance",
+    title: "Vigniance",
+    subtitle: "Industrial AI Startup — CTO",
+    description:
+      "An industrial operating intelligence platform — internally described as the brain, memory, and central nervous system of the factory — sitting above existing PLCs, SCADA, VFDs, historians, MES, and ERP/CRM systems. It ingests machine data, learns a per-machine behavioral baseline, and surfaces explainable recommendations mainly through WhatsApp. Grounded in a customer discovery interview with a senior electrical maintenance leader at Tata Steel, who used an ECG analogy: every machine has a unique baseline, and anomalies should be flagged relative to that baseline rather than a generic threshold — a gap no existing vendor (Infinite Uptime, IBA/ibaDAQ, SCADA) was filling with per-machine signature analysis.",
+    tags: ["Industrial AI", "Predictive Maintenance", "IoT", "FastAPI", "TimescaleDB"],
+    year: "Ongoing",
+    highlights: [
+      "Downtime costs ~₹50,000/hour on the critical line; hybrid edge + cloud architecture keeps data on company-controlled cloud/on-prem",
+      "Five/six-module system — ingestion, context graph, rules/signature engine, recommendation, action/write-back — on a canonical data model (Plant, Line, Cell, Machine, Component, Tag, Event, Incident, Action)",
+      "Connector strategy: OPC-UA, MQTT, historian exports, then ERP/MES REST APIs, on a free-tier stack (FastAPI, PostgreSQL/TimescaleDB, Neo4j, React, MQTT)",
+      "Ships in suggestion-only co-pilot mode with full explainability — operators need to see the reasoning before trusting a recommendation",
+      "Pilot success defined as one confirmed early detection of an abnormality existing tools missed; GTM path via Tata Business Excellence Group, targeting single-line continuous-process plants (steel rolling, wire drawing) first",
+      "Built a personal CTO Agent — a multi-LLM orchestration layer (Claude, Gemini) on a local + cloud hybrid stack (n8n, Supabase, GitHub Actions) — to accelerate the build itself",
+    ],
+  },
+  {
     slug: "mastercard-agentic-commerce",
     title: "Mastercard Agentic Commerce Business Impact Lab",
     subtitle: "Agentic commerce strategy for Spanish food delivery",
