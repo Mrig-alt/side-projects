@@ -76,15 +76,6 @@ export const projects: Project[] = [
     ],
   },
   {
-    slug: "matirea",
-    title: "MATIREA — Circular Textile Go-to-Market Strategy",
-    subtitle: "IE Final Impact Project",
-    description:
-      "A full go-to-market strategy suite for a circular textile company expanding from Ecuador into Spain — a written strategy report, a 12-slide investor deck, a speaker transcript, and a final PPTX.",
-    tags: ["GTM Strategy", "Circular Economy", "Market Entry"],
-    year: "2026",
-  },
-  {
     slug: "coursera-techwolf",
     title: "Innovation Scouting — Coursera / TechWolf",
     subtitle: "CVC investment recommendation",
@@ -230,14 +221,6 @@ export const blogPosts: BlogPost[] = [
     title: "Automating the Boring Parts of an MBA",
     premise: "The Make.com, Todoist, and Apps Script scaffolding that runs quietly in the background of a cohort of 100+.",
     tags: ["Automation", "MBA"],
-    status: "draft",
-    date: "2026",
-  },
-  {
-    slug: "circular-textiles-market-entry",
-    title: "Circular Textiles and Market Entry",
-    premise: "What MATIREA's expansion from Ecuador into Spain surfaced about go-to-market strategy for circular businesses.",
-    tags: ["GTM Strategy", "Circular Economy"],
     status: "draft",
     date: "2026",
   },

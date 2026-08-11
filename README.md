@@ -31,4 +31,6 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Deploy
 
-Static-exportable Next.js app — deploys as-is to Vercel or Netlify, or via `next build && next export`-style static hosting (e.g. GitHub Pages) with minimal config changes.
+Configured for static export (`output: "export"` in `next.config.ts`) — `npm run build` produces a fully static `out/` directory with no server required.
+
+For Cloudflare Pages: connect this repo/branch, set the build command to `npm run build` and the output directory to `out`. For Cloudflare Workers with static assets, point the assets binding at `out/` after running the build.
